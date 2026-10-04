@@ -91,6 +91,16 @@ def test_sanitize_error_message_redacts_demo_bearer_token(monkeypatch) -> None:
     assert REDACTED in rendered
 
 
+def test_sanitize_error_message_redacts_judit_callback_url(monkeypatch) -> None:
+    callback_url = "https://staging.example.invalid/webhooks/judit/secret-callback-token-789"
+    monkeypatch.setenv("JUDIT_CALLBACK_URL", callback_url)
+
+    rendered = sanitize_error_message(f"callback request to {callback_url} failed")
+
+    assert callback_url not in rendered
+    assert REDACTED in rendered
+
+
 @pytest.mark.parametrize("scheme", ["Bearer", "APIKey", "Basic", "Token", "Digest", "Negotiate", "OAuth"])
 def test_sanitize_error_message_redacts_authorization_schemes(scheme: str) -> None:
     rendered = sanitize_error_message(
