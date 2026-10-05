@@ -111,6 +111,56 @@ async def reindex_batch(
     }
 
 
+async def reindex_all(
+    pool: Any,
+    *,
+    runtime: Any,
+    limit: int = DEFAULT_BATCH_VERSIONS,
+    dry_run: bool = False,
+) -> dict[str, Any]:
+    if limit <= 0:
+        raise ValueError("version batch limit must be positive")
+
+    after_version_id: UUID | None = None
+    batches = 0
+    versions_seen = 0
+    versions_with_missing = 0
+    embeddings_written = 0
+
+    while True:
+        report = await reindex_batch(
+            pool,
+            runtime=runtime,
+            limit=limit,
+            after_version_id=after_version_id,
+            dry_run=dry_run,
+        )
+        batches += 1
+        versions_seen += int(report["versions_seen"])
+        versions_with_missing += int(report["versions_with_missing"])
+        embeddings_written += int(report["embeddings_written"])
+
+        next_after = report.get("next_after_version_id")
+        if not report.get("has_more"):
+            return {
+                "space": runtime.space.key,
+                "dry_run": dry_run,
+                "batches": batches,
+                "versions_seen": versions_seen,
+                "versions_with_missing": versions_with_missing,
+                "embeddings_written": embeddings_written,
+                "completed": True,
+                "last_version_id": next_after,
+            }
+
+        if not next_after:
+            raise RuntimeError("reindex checkpoint did not advance")
+        candidate = UUID(str(next_after))
+        if candidate == after_version_id:
+            raise RuntimeError("reindex checkpoint repeated without progress")
+        after_version_id = candidate
+
+
 async def _run(args: argparse.Namespace) -> dict[str, Any]:
     database_url = str(args.database_url or os.environ.get("DATABASE_URL") or "").strip()
     if not database_url:
@@ -118,6 +168,15 @@ async def _run(args: argparse.Namespace) -> dict[str, Any]:
     runtime = get_active_embedding_runtime()
     pool = await create_pool(database_url, min_size=1, max_size=2)
     try:
+        if args.run_all:
+            if args.after_version is not None:
+                raise RuntimeError("--after-version cannot be combined with --all")
+            return await reindex_all(
+                pool,
+                runtime=runtime,
+                limit=args.limit,
+                dry_run=args.dry_run,
+            )
         return await reindex_batch(
             pool,
             runtime=runtime,
@@ -136,6 +195,12 @@ def main() -> int:
     parser.add_argument("--database-url", default=None)
     parser.add_argument("--limit", type=int, default=DEFAULT_BATCH_VERSIONS)
     parser.add_argument("--after-version", type=UUID, default=None)
+    parser.add_argument(
+        "--all",
+        dest="run_all",
+        action="store_true",
+        help="Process resumable batches until the active embedding space is complete",
+    )
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args()
     report = asyncio.run(_run(args))
