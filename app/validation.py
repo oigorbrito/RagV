@@ -93,8 +93,6 @@ class ValidationResult:
     errors: list[str]
 
 
-# Memoize digit extraction for short CNJ and identifier strings.
-@lru_cache(maxsize=1024)
 def _normalize_digits(value: str) -> str:
     return "".join(character for character in value if character.isdigit())
 
