@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 import argparse
+import json
 import os
 from pathlib import Path
 
-from app.bge_runtime_contract import validate_flagembedding_runtime
+from app.artifact_provenance import artifact_manifest, sha256_file
+from app.bge_runtime_contract import EXPECTED_FLAGEMBEDDING_VERSION, validate_flagembedding_runtime
 from app.json_utils import loads_strict_json
 
 REQUIRED_OFFLINE_ENV = (
@@ -56,16 +58,53 @@ def validate(*, model_dir: Path, environ: dict[str, str] | None = None) -> list[
     return errors
 
 
+def evidence_report(
+    *,
+    model_dir: Path,
+    environ: dict[str, str] | None = None,
+) -> dict[str, object]:
+    errors = validate(model_dir=model_dir, environ=environ)
+    if errors:
+        raise RuntimeError("BGE embedding artifact is not deployment-ready")
+
+    config = model_dir / "config.json"
+    return {
+        "report_version": 1,
+        "model": "BAAI/bge-m3",
+        "flagembedding_version": EXPECTED_FLAGEMBEDDING_VERSION,
+        "artifact_config_sha256": sha256_file(config),
+        "artifact_manifest": artifact_manifest(
+            model_dir,
+            label="BGE embedding artifact",
+        ),
+    }
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Verify offline BGE image readiness")
     parser.add_argument("--model-dir", type=Path, required=True)
+    parser.add_argument(
+        "--evidence-json",
+        action="store_true",
+        help="Emit machine-readable local-artifact evidence after validation",
+    )
     args = parser.parse_args()
     errors = validate(model_dir=args.model_dir)
     if errors:
         for error in errors:
             print(f"bge image contract: {error}")
         return 1
-    print("bge image contract: ok")
+    if args.evidence_json:
+        print(
+            json.dumps(
+                evidence_report(model_dir=args.model_dir),
+                ensure_ascii=False,
+                indent=2,
+                sort_keys=True,
+            )
+        )
+    else:
+        print("bge image contract: ok")
     return 0
 
 
