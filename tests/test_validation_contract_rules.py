@@ -116,6 +116,36 @@ def test_accepts_source_backed_structured_fields() -> None:
     assert result.passed is True
 
 
+def test_accepts_source_backed_rito_and_gratuidade_claims() -> None:
+    source = (
+        '{"header":{"procedure":"Juizado Especial Cível"},'
+        '"steps":[{"text":"Justiça gratuita deferida."}]}'
+    )
+    result = validar(
+        text="- Rito: Juizado Especial Cível\n- Justiça gratuita: deferida",
+        code=CODE,
+        parties=PARTIES,
+        source_text=source,
+    )
+    assert result.passed is True
+
+
+def test_rejects_rito_and_gratuidade_values_absent_from_source_context() -> None:
+    source = (
+        '{"header":{"procedure":"Procedimento Comum"},'
+        '"steps":[{"text":"Pedido de gratuidade pendente de análise."}]}'
+    )
+    result = validar(
+        text="- Rito: Juizado Especial Cível\n- Justiça gratuita: deferida",
+        code=CODE,
+        parties=PARTIES,
+        source_text=source,
+    )
+    assert result.passed is False
+    assert "source-backed field mismatch: Rito=Juizado Especial Cível" in result.errors
+    assert "source-backed field mismatch: Justiça gratuita=deferida" in result.errors
+
+
 def test_rejects_structured_field_value_absent_from_source_context() -> None:
     result = validar(
         text="- Área: Penal\n- Classe: Habeas Corpus",
