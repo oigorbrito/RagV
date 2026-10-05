@@ -14,6 +14,7 @@ const ids = [
   "copy-summary","new-search","action-feedback","result-code","result-class",
   "result-court","result-updated","result-context","parties-list","subjects-list",
   "header-data","movements-list","summary-body","summary-provenance","summary-eyebrow",
+  "summary-title","case-data-title","movements-title",
 ];
 
 class ClassList {
@@ -125,10 +126,24 @@ function createHarness(fetchResponses, { apiBase = "same-origin" } = {}) {
   let timerId = 0;
   let clipboardText = "";
 
+  const navLinks = [
+    { href: "#summary-title", listeners: {} },
+    { href: "#case-data-title", listeners: {} },
+    { href: "#movements-title", listeners: {} },
+  ].map(link => ({
+    getAttribute(name) { return name === "href" ? link.href : null; },
+    addEventListener(type, handler) { link.listeners[type] = handler; },
+    listeners: link.listeners,
+  }));
+
   const document = {
     querySelector(selector) {
       assert.match(selector, /^#[a-z0-9-]+$/i, `unexpected selector: ${selector}`);
       return elements[selector.slice(1)];
+    },
+    querySelectorAll(selector) {
+      if (selector === ".document-nav a") return navLinks;
+      return [];
     },
     createElement(tag) {
       return new Element(tag);
@@ -192,6 +207,10 @@ function createHarness(fetchResponses, { apiBase = "same-origin" } = {}) {
     async click(id) {
       assert.equal(typeof elements[id].listeners.click, "function", `${id} has no click listener`);
       await elements[id].listeners.click();
+    },
+    async clickNavLink(index) {
+      assert.equal(typeof navLinks[index].listeners.click, "function", `navLink ${index} has no click listener`);
+      await navLinks[index].listeners.click();
     },
     pagehide() {
       windowListeners.pagehide?.();
@@ -466,6 +485,13 @@ await scenario("bearer token field submits search on Enter", async () => {
   assert.equal(prevented, true);
   assert.equal(ui.requests.length, 1);
   assert.equal(ui.requests[0].url, `/processes/${encodeURIComponent(VALID_CODE)}`);
+});
+
+await scenario("section navigation links shift focus to target headings", async () => {
+  const ui = createHarness([jsonResponse(200, readyPayload())]);
+  await ui.search();
+  await ui.clickNavLink(1);
+  assert.equal(ui.elements["case-data-title"].focused, true);
 });
 
 console.log("frontend behavior harness: PASS");
