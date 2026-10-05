@@ -4,6 +4,7 @@ import vm from "node:vm";
 
 const APP_PATH = "app/frontend/app.js";
 const CSS_PATH = "app/frontend/app.css";
+const HTML_PATH = "app/frontend/index.html";
 const VALID_CODE = "0000000-00.2026.8.21.0001";
 const TOKEN = "test-token";
 
@@ -438,6 +439,30 @@ await scenario("new search and pagehide cancel polling without erasing the in-me
 await scenario("CNJ heading uses sans-serif tabular numerals for legibility", async () => {
   const css = fs.readFileSync(CSS_PATH, "utf8");
   assert.match(css, /\.process-header h2\{[^}]*ui-sans-serif[^}]*font-variant-numeric:tabular-nums/);
+});
+
+await scenario("pressing Enter in bearer token field submits search and token toggle controls token input", async () => {
+  const html = fs.readFileSync(HTML_PATH, "utf8");
+  assert.match(html, /<button id="toggle-token"[^>]*aria-controls="bearer-token"/);
+
+  const ui = createHarness([jsonResponse(200, readyPayload())]);
+  ui.elements["process-code"].value = VALID_CODE;
+  ui.elements["bearer-token"].value = TOKEN;
+
+  const keydownListener = ui.elements["bearer-token"].listeners["keydown"];
+  assert.equal(typeof keydownListener, "function");
+
+  let defaultPrevented = false;
+  await keydownListener({
+    key: "Enter",
+    preventDefault() {
+      defaultPrevented = true;
+    },
+  });
+
+  assert.equal(defaultPrevented, true);
+  assert.equal(ui.requests.length, 1);
+  assert.equal(ui.requests[0].url, `/processes/${encodeURIComponent(VALID_CODE)}`);
 });
 
 console.log("frontend behavior harness: PASS");
