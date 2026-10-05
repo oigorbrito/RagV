@@ -122,3 +122,56 @@ def test_bge_image_readiness_rejects_non_object_config_json(
     errors = verifier.validate(model_dir=model_dir, environ=_offline_env(model_dir))
     if "BGE model config.json must contain an object" not in errors:
         raise AssertionError(f"expected object-root error, got {errors!r}")
+
+
+def test_bge_embedding_evidence_report_binds_full_artifact(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    model_dir = tmp_path / "bge-m3"
+    model_dir.mkdir()
+    config = model_dir / "config.json"
+    config.write_text('{"hidden_size": 1024}', encoding="utf-8")
+    weights = model_dir / "model.safetensors"
+    weights.write_bytes(b"synthetic-bge-weights")
+    monkeypatch.setattr(importlib.util, "find_spec", lambda name: object())
+    monkeypatch.setattr(bge_runtime_contract, "package_version", lambda name: "1.4.2")
+
+    report = verifier.evidence_report(
+        model_dir=model_dir,
+        environ=_offline_env(model_dir),
+    )
+
+    assert report["report_version"] == 1
+    assert report["model"] == "BAAI/bge-m3"
+    assert report["flagembedding_version"] == "1.4.2"
+    assert len(report["artifact_config_sha256"]) == 64
+    manifest = report["artifact_manifest"]
+    assert manifest["file_count"] == 2
+    assert manifest["total_bytes"] == config.stat().st_size + weights.stat().st_size
+    assert len(manifest["sha256"]) == 64
+
+    original = manifest["sha256"]
+    weights.write_bytes(b"changed-synthetic-bge-weights")
+    changed = verifier.evidence_report(
+        model_dir=model_dir,
+        environ=_offline_env(model_dir),
+    )
+    assert changed["artifact_manifest"]["sha256"] != original
+
+
+def test_bge_embedding_evidence_report_fails_closed_when_contract_invalid(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    model_dir = tmp_path / "bge-m3"
+    model_dir.mkdir()
+    (model_dir / "config.json").write_text('{"hidden_size": 768}', encoding="utf-8")
+    monkeypatch.setattr(importlib.util, "find_spec", lambda name: object())
+    monkeypatch.setattr(bge_runtime_contract, "package_version", lambda name: "1.4.2")
+
+    with pytest.raises(RuntimeError, match="not deployment-ready"):
+        verifier.evidence_report(
+            model_dir=model_dir,
+            environ=_offline_env(model_dir),
+        )
