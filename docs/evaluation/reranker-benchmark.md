@@ -15,12 +15,16 @@ export HF_HUB_OFFLINE=1
 export TRANSFORMERS_OFFLINE=1
 export HF_DATASETS_OFFLINE=1
 python scripts/verify_bge_reranker_artifact.py --model-dir "$BGE_RERANKER_PATH"
-python scripts/benchmark_reranker.py --scorer bge
+python scripts/benchmark_reranker.py --scorer bge --deployment-evidence
 ```
 
 `BGE_RERANKER_PATH` must exist and be a directory. The verifier also requires `FlagEmbedding`, a parseable local `config.json`, and offline Hugging Face/Transformers/Datasets settings before the real benchmark runs. The runtime keeps the semantic/model identity pinned to `BAAI/bge-reranker-v2-m3` while loading model bytes from that local path. This avoids treating a model-hub download during benchmark execution as production evidence.
 
 If `BGE_RERANKER_PATH` is unset, the scorer can still resolve the configured model identifier through FlagEmbedding for local development. Such a run is not sufficient evidence that the production artifact is prepared and reproducible.
+
+`--deployment-evidence` fails closed unless the run is a real BGE report bound to a local artifact
+with a complete artifact manifest. Use that flag for issue #121 acceptance so a model-hub development
+run cannot be mistaken for deployment evidence.
 
 The report records observed wall-clock elapsed time for baseline and reranked paths plus retrieval quality metrics. It also binds the evidence to its execution inputs:
 

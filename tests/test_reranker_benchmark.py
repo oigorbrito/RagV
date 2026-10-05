@@ -234,3 +234,33 @@ def test_bge_runtime_provenance_rejects_directory_symlink(
 
     with pytest.raises(RuntimeError, match="unsupported directory symlink"):
         _BENCHMARK._runtime_provenance("bge", scorer)
+
+
+def test_deployment_evidence_requires_local_bge_artifact() -> None:
+    report = {
+        "runtime": {
+            "kind": "bge",
+            "local_artifact_bound": True,
+            "artifact_manifest": {"sha256": "a" * 64},
+        }
+    }
+    _BENCHMARK.require_deployment_evidence(report)
+
+
+@pytest.mark.parametrize(
+    "runtime,match",
+    [
+        ({"kind": "synthetic"}, "requires --scorer bge"),
+        (
+            {"kind": "bge", "local_artifact_bound": False, "artifact_manifest": None},
+            "requires BGE_RERANKER_PATH",
+        ),
+        (
+            {"kind": "bge", "local_artifact_bound": True, "artifact_manifest": {}},
+            "requires a complete local artifact manifest",
+        ),
+    ],
+)
+def test_deployment_evidence_rejects_nonqualifying_reports(runtime, match) -> None:
+    with pytest.raises(RuntimeError, match=match):
+        _BENCHMARK.require_deployment_evidence({"runtime": runtime})
