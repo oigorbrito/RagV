@@ -70,6 +70,15 @@ def test_sanitize_error_message_redacts_anthropic_api_key_token() -> None:
     assert REDACTED in rendered
 
 
+def test_sanitize_error_message_redacts_datajud_api_key_token() -> None:
+    rendered = sanitize_error_message(
+        "provider failed for datajud_live_1234567890abcdef"
+    )
+
+    assert "datajud_live_1234567890abcdef" not in rendered
+    assert REDACTED in rendered
+
+
 def test_sanitize_error_message_redacts_json_bearer_token_key(monkeypatch) -> None:
     monkeypatch.setenv(
         "RPY_BEARER_TOKENS",
