@@ -126,63 +126,30 @@ and applies only to browser-facing process routes; `/ops` and Judit webhook rout
 The Pages workflow is manual. Enable GitHub Pages with **GitHub Actions** as the deployment source
 before dispatching it.
 
-## Lightsail host bootstrap
+## Local persistent staging ingress
 
-For the first persistent staging host, the repository includes an optional Lightsail bootstrap that
-preserves the existing single-host Compose topology instead of translating it into provider-specific
-services.
+The current persistent staging host may terminate public HTTPS outside the Compose application
+stack, but the API itself remains on the private Compose `backend` network. A separate ingress
+container may join that backend network and publish only its own listener on host loopback.
 
-Prerequisites:
+Use `ops/staging/nginx.conf` as the repository-owned ingress contract. It deliberately resolves
+the Compose service alias `api:8000` through Docker DNS (`127.0.0.11`) at request time. Do not
+pin an API container IP: recreating the API can change its container address while leaving the
+stale ingress process alive.
 
-- AWS CLI v2 installed and authenticated to the intended account;
-- permission to read/create Lightsail instances, static IPs and public-port configuration;
-- an administrator IPv4 CIDR for SSH. Use a single address as `x.x.x.x/32` when possible.
-
-First resolve the current AWS-side plan without creating anything:
-
-```bash
-python scripts/provision_lightsail_staging.py \
-  --ssh-cidr YOUR.PUBLIC.IP/32
-```
-
-The script queries Lightsail for the region's availability zones, active Ubuntu blueprint and active
-Linux bundles, then selects the cheapest plan meeting the default floor of 16 GB RAM / 4 vCPU.
-
-Apply the same resolved topology only after reviewing the printed plan:
+Validate the ingress configuration before starting/recreating it:
 
 ```bash
-python scripts/provision_lightsail_staging.py \
-  --ssh-cidr YOUR.PUBLIC.IP/32 \
-  --apply
+python scripts/validate_staging_ingress.py --config ops/staging/nginx.conf
 ```
 
-The mutation is intentionally narrow:
+For a Compose project named `rpy`, the separate ingress joins the existing backend network
+(`rpy_backend`) and publishes only a loopback port for the host-level HTTPS/Funnel terminator.
+The ingress must not move the API onto a public network and must not publish PostgreSQL.
 
-- region defaults to `sa-east-1`;
-- an IPv4 Lightsail instance is created only when the named instance does not already exist;
-- a static IP is allocated/attached;
-- the complete public-port policy becomes SSH only from the supplied CIDR plus HTTP/HTTPS publicly;
-- no database, provider credential, DNS zone or paid provider request is created.
-
-After the instance exists, copy the repository's host bootstrap script to it and run as root:
-
-```bash
-sudo bash scripts/bootstrap_staging_host.sh
-```
-
-That installs Docker Engine and the Compose plugin from Docker's official Ubuntu repository and Caddy
-from Caddy's official stable Debian/Ubuntu repository, then creates `/opt/rpy` and `/etc/rpy`.
-The host bootstrap does not deploy the application or contain Rpy/provider secrets.
-
-Next:
-
-1. point the intended staging DNS A record at the static IPv4 address;
-2. clone the repository into `/opt/rpy` and check out the qualified source SHA;
-3. place the populated environment file under `/etc/rpy/staging.env` with mode `0600`;
-4. configure Caddy to reverse proxy the staging hostname to `127.0.0.1:8000`;
-5. deploy the exact qualified `RPY_IMAGE` with `scripts/deploy_production.py`;
-6. run `staging-readiness`;
-7. configure `PAGES_API_BASE_URL` to the stable backend HTTPS origin and redeploy Pages.
+A Tailscale Funnel or equivalent host-level HTTPS terminator may forward to that loopback ingress
+listener. The repository does not manage Tailscale account state or DNS. This staging arrangement is
+environment-specific and does not replace the canonical production Compose contract.
 
 ## Target-environment acceptance
 
