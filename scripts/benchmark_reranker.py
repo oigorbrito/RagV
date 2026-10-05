@@ -243,14 +243,34 @@ async def benchmark_report(
     }
 
 
+def require_deployment_evidence(report: dict[str, Any]) -> None:
+    runtime = report.get("runtime")
+    if not isinstance(runtime, dict) or runtime.get("kind") != "bge":
+        raise RuntimeError("deployment evidence requires --scorer bge")
+    if runtime.get("local_artifact_bound") is not True:
+        raise RuntimeError(
+            "deployment evidence requires BGE_RERANKER_PATH bound to a verified local artifact"
+        )
+    manifest = runtime.get("artifact_manifest")
+    if not isinstance(manifest, dict) or not manifest.get("sha256"):
+        raise RuntimeError("deployment evidence requires a complete local artifact manifest")
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Compare Rpy retrieval with and without reranking")
     parser.add_argument("--dataset", type=Path, default=DEFAULT_DATASET)
     parser.add_argument("--scorer", choices=("synthetic", "bge"), default="synthetic")
+    parser.add_argument(
+        "--deployment-evidence",
+        action="store_true",
+        help="Fail unless the report is a local-artifact-bound real BGE deployment run",
+    )
     args = parser.parse_args()
     report = asyncio.run(
         benchmark_report(args.dataset, scorer_name=args.scorer)
     )
+    if args.deployment_evidence:
+        require_deployment_evidence(report)
     print(json.dumps(report, ensure_ascii=False, indent=2, sort_keys=True))
     return 0
 
