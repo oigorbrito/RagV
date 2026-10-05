@@ -50,6 +50,35 @@ async def test_empty_steps_adds_factual_source_warning_to_provider_context(monke
     assert provider_steps == []
 
 
+@pytest.mark.asyncio
+async def test_cached_source_adds_possible_staleness_warning(monkeypatch) -> None:
+    async def fake_load_process(pool, process_id, version_id):
+        return {
+            "code": "0000000-00.2026.8.21.0001",
+            "court": "TJRS",
+            "class_name": "Procedimento Comum",
+            "subjects": [],
+            "parties": [],
+            "representatives": [],
+            "secrecy_level": 0,
+            "header": {},
+            "_source_cached_response": True,
+            "_datajud_conflict_fields": [],
+        }
+
+    async def fake_load_steps(conn, *, version_id):
+        return []
+
+    monkeypatch.setattr(rag, "_load_process", fake_load_process)
+    monkeypatch.setattr(rag, "load_steps", fake_load_steps)
+
+    context = await rag._load_context(_Pool(), uuid4(), uuid4())
+
+    assert rag.CACHED_SOURCE_WARNING in context["source_warnings"]
+    provider_process, _ = rag._provider_payload(context)
+    assert rag.CACHED_SOURCE_WARNING in provider_process["source_warnings"]
+
+
 def test_empty_steps_warning_must_be_inside_attention_section() -> None:
     context = {
         "code": "0000000-00.2026.8.21.0001",

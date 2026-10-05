@@ -88,6 +88,7 @@ RETRIEVAL_QUERY = (
     "trânsito em julgado"
 )
 EMPTY_STEPS_WARNING = "Nenhum movimento processual foi fornecido no payload."
+CACHED_SOURCE_WARNING = "A fonte foi entregue como resposta em cache e pode estar desatualizada."
 PASSIVE_PARTY_NO_REPRESENTATIVE_OR_CITATION_WARNING = (
     "Há parte passiva sem representante normalizado e sem citação explícita "
     "nos movimentos fornecidos."
@@ -249,6 +250,7 @@ async def _load_process(
             """
             SELECT p.id, p.code, p.court, p.class_name, p.subjects, p.parties,
                    p.representatives, p.secrecy_level, p.header,
+                   pv.source_cached_response,
                    COALESCE(
                        (
                            SELECT jsonb_agg(dfp.field_name ORDER BY dfp.field_name)
@@ -261,6 +263,9 @@ async def _load_process(
                        '[]'::jsonb
                    ) AS datajud_conflict_fields
             FROM processes p
+            JOIN process_versions pv
+              ON pv.id = $2
+             AND pv.process_id = p.id
             WHERE p.id = $1 AND p.current_version_id = $2
             """,
             process_id,
@@ -280,6 +285,7 @@ async def _load_process(
         ),
         "secrecy_level": int(process["secrecy_level"] or 0),
         "header": decode_json_object(process["header"], label="process header"),
+        "_source_cached_response": bool(process["source_cached_response"]),
         "_datajud_conflict_fields": decode_json_list(
             process["datajud_conflict_fields"],
             label="DataJud conflict fields",
@@ -333,6 +339,8 @@ async def _load_context(
     source_warnings = (
         [EMPTY_STEPS_WARNING] if not steps else _source_step_gap_warnings(steps)
     )
+    if base.get("_source_cached_response"):
+        source_warnings.append(CACHED_SOURCE_WARNING)
     source_warnings.extend(
         _passive_party_attention_warnings(
             base.get("parties") or [],
