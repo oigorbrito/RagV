@@ -39,6 +39,35 @@ def _hash_identifier(value: str) -> str:
     return hashlib.sha256(value.encode("utf-8")).hexdigest()
 
 
+def _persist_judit_request_id(path: Path | None, request_id: str) -> bool:
+    if path is None:
+        return False
+    normalized_request_id = str(request_id or "").strip()
+    if not normalized_request_id:
+        raise RuntimeError("cannot persist an empty Judit request id")
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = path.with_name(f".{path.name}.{os.getpid()}.tmp")
+    fd: int | None = None
+    try:
+        fd = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+            fd = None
+            handle.write(normalized_request_id + "\n")
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(temporary, path)
+        os.chmod(path, 0o600)
+    finally:
+        if fd is not None:
+            os.close(fd)
+        try:
+            temporary.unlink()
+        except FileNotFoundError:
+            pass
+    return True
+
+
 def _cnj_checksum_valid(normalized: str) -> bool:
     digits = "".join(character for character in normalized if character.isdigit())
     if len(digits) != 20:
@@ -216,7 +245,11 @@ async def diagnose_judit() -> dict[str, Any]:
     return report
 
 
-async def _smoke_judit(code: str) -> dict[str, Any]:
+async def _smoke_judit(
+    code: str,
+    *,
+    request_id_file: Path | None = None,
+) -> dict[str, Any]:
     report = _base_report("judit")
     if not os.getenv("JUDIT_API_KEY", "").strip():
         report["status"] = "skipped_missing_credentials"
@@ -229,6 +262,10 @@ async def _smoke_judit(code: str) -> dict[str, Any]:
 
     started = perf_counter()
     result = await create_lawsuit_request(code)
+    request_id_persisted = _persist_judit_request_id(
+        request_id_file,
+        result.request_id,
+    )
     elapsed_ms = (perf_counter() - started) * 1000
     report.update(
         {
@@ -237,6 +274,7 @@ async def _smoke_judit(code: str) -> dict[str, Any]:
             "status": "request_created",
             "latency_ms": round(elapsed_ms, 3),
             "request_id_sha256": _hash_identifier(result.request_id),
+            "request_id_persisted": request_id_persisted,
         }
     )
     return report
@@ -331,7 +369,11 @@ async def _observe_judit_request(
     return report
 
 
-async def _smoke_judit_roundtrip(code: str) -> dict[str, Any]:
+async def _smoke_judit_roundtrip(
+    code: str,
+    *,
+    request_id_file: Path | None = None,
+) -> dict[str, Any]:
     if judit_attachments_enabled():
         raise RuntimeError("Judit round-trip smoke requires JUDIT_ATTACHMENTS_ENABLED=false")
     if not os.getenv("JUDIT_API_KEY", "").strip():
@@ -344,7 +386,12 @@ async def _smoke_judit_roundtrip(code: str) -> dict[str, Any]:
         return report
 
     created = await create_lawsuit_request(code)
+    request_id_persisted = _persist_judit_request_id(
+        request_id_file,
+        created.request_id,
+    )
     report = await _observe_judit_request(created.request_id, post_calls=1)
+    report["request_id_persisted"] = request_id_persisted
     observed_status = str(report.get("status") or "")
     report["status"] = {
         "observed_completed": "roundtrip_completed",
@@ -389,10 +436,20 @@ async def _smoke_datajud(code: str) -> dict[str, Any]:
     return report
 
 
-async def run_smoke(provider: str, code: str) -> dict[str, Any]:
+async def run_smoke(
+    provider: str,
+    code: str,
+    *,
+    judit_request_id_file: Path | None = None,
+) -> dict[str, Any]:
     normalized = normalize_cnj(code)
     if provider == "judit":
-        return await _smoke_judit(normalized)
+        if judit_request_id_file is None:
+            return await _smoke_judit(normalized)
+        return await _smoke_judit(
+            normalized,
+            request_id_file=judit_request_id_file,
+        )
     if provider == "datajud":
         return await _smoke_datajud(normalized)
     if provider == "both":
@@ -425,8 +482,16 @@ async def run_smoke(provider: str, code: str) -> dict[str, Any]:
                 "diagnostic": diagnostic,
             }
 
+        judit_call = (
+            _smoke_judit(normalized)
+            if judit_request_id_file is None
+            else _smoke_judit(
+                normalized,
+                request_id_file=judit_request_id_file,
+            )
+        )
         judit, datajud = await asyncio.gather(
-            _smoke_judit(normalized),
+            judit_call,
             _smoke_datajud(normalized),
         )
         return {
@@ -478,6 +543,19 @@ def main() -> int:
         help="Existing Judit request id for --judit-observe; prefer environment injection",
     )
     parser.add_argument(
+        "--judit-request-id-file",
+        type=Path,
+        default=(
+            Path(os.environ["PROVIDER_ACCEPTANCE_JUDIT_REQUEST_ID_FILE"])
+            if os.getenv("PROVIDER_ACCEPTANCE_JUDIT_REQUEST_ID_FILE", "").strip()
+            else None
+        ),
+        help=(
+            "Persist the raw request id to a private file immediately after Judit "
+            "creates the request; stdout/captures remain hashed"
+        ),
+    )
+    parser.add_argument(
         "--preflight-cnj",
         action="store_true",
         help="Validate CNJ format/check digits locally and exit without network calls",
@@ -527,7 +605,12 @@ def main() -> int:
             report["status"] = "skipped_missing_cnj"
         else:
             try:
-                report = asyncio.run(_smoke_judit_roundtrip(normalize_cnj(args.cnj)))
+                report = asyncio.run(
+                    _smoke_judit_roundtrip(
+                        normalize_cnj(args.cnj),
+                        request_id_file=args.judit_request_id_file,
+                    )
+                )
                 if args.capture_file is not None and report.get("executed"):
                     write_capture(args.capture_file, code=args.cnj, report=report)
             except Exception as exc:
@@ -545,7 +628,16 @@ def main() -> int:
         if args.replay_file is not None:
             report = load_replay(args.replay_file, code=args.cnj)
         else:
-            report = asyncio.run(run_smoke(args.provider, args.cnj))
+            if args.judit_request_id_file is None:
+                report = asyncio.run(run_smoke(args.provider, args.cnj))
+            else:
+                report = asyncio.run(
+                    run_smoke(
+                        args.provider,
+                        args.cnj,
+                        judit_request_id_file=args.judit_request_id_file,
+                    )
+                )
             if args.capture_file is not None and report.get("executed"):
                 write_capture(args.capture_file, code=args.cnj, report=report)
     except Exception as exc:

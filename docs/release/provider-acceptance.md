@@ -105,8 +105,21 @@ in the created request/response objects. The workflow defaults to Judit's curren
 `requests.production.judit.io` only as a compatibility alias observed in earlier successful runs.
 Use exactly one host per paid run; do not probe both with POST requests.
 
-A successful run must return `request_created` and stores only the sanitized request-id hash and
-timing metadata in the acceptance capture.
+A successful run must return `request_created`. Stdout and the acceptance capture store only the
+sanitized request-id hash and timing metadata. For live requests, persist the raw Judit request ID
+separately so the same paid request can be observed if webhook delivery fails:
+
+```bash
+python scripts/provider_live_smoke.py --provider judit \
+  --judit-request-id-file /private-artifacts/judit-request-id
+```
+
+The raw ID file is written immediately after request creation, before any follow-up observation. On
+POSIX filesystems it is forced to mode `0600`; on Windows, access is governed by the containing
+filesystem ACL rather than POSIX mode bits, so use a directory restricted to the operator/service
+account. Keep that path on a private mounted volume outside the repository. The equivalent
+environment variable is `PROVIDER_ACCEPTANCE_JUDIT_REQUEST_ID_FILE`. Do not upload this file as an
+Actions artifact or include it in acceptance logs.
 
 A production acquisition should prefer webhook completion over long-lived polling. When
 `JUDIT_CALLBACK_URL` is configured, Rpy includes it in the Judit request payload. The value must be
@@ -193,6 +206,9 @@ python scripts/provider_live_smoke.py --provider both \
 The capture stores the CNJ only as SHA-256, records the request shape without credentials, and stores
 the sanitized smoke response (status, latency, request-id hash and DataJud result metadata flags).
 It does **not** persist API keys, the raw CNJ, raw judicial payloads, or the raw Judit request ID.
+When `--judit-request-id-file` is explicitly supplied, the raw request ID is written only to that
+separate private file (mode `0600` on POSIX; protected by the containing directory ACL on Windows);
+it is never added to the sanitized capture.
 
 The same capture can then be replayed without provider credentials or provider network calls:
 

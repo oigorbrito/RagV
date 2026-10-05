@@ -19,6 +19,7 @@ dependencies = [
   "openai>=1.100,<2",
   "pgvector>=0.4,<1",
   "pypdf>=6.19,<7",
+  "tzdata>=2026.5; platform_system == 'Windows'",
 ]
 
 [project.optional-dependencies]
