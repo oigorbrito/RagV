@@ -192,6 +192,76 @@ def rag_invariant_violations() -> list[str]:
     return errors
 
 
+def claim_verification_invariant_violations() -> list[str]:
+    verification = ROOT / "app" / "claim_verification.py"
+    evidence = ROOT / "app" / "claim_evidence.py"
+    rag = ROOT / "app" / "rag.py"
+    migration = ROOT / "sql" / "033_claim_semantic_verification.sql"
+    engineering_doc = ROOT / "docs" / "engineering" / "rag-claim-verification.md"
+    migration_doc = ROOT / "docs" / "migrations" / "claim-semantic-verification.md"
+    unit_tests = ROOT / "tests" / "test_claim_verification.py"
+    persistence_tests = ROOT / "tests" / "integration" / "test_validation_persistence_postgres.py"
+    secrecy_tests = ROOT / "tests" / "integration" / "test_pipeline_secrecy_e2e.py"
+
+    required = (
+        verification,
+        evidence,
+        rag,
+        migration,
+        engineering_doc,
+        migration_doc,
+        unit_tests,
+        persistence_tests,
+        secrecy_tests,
+    )
+    missing = [f"missing {path.relative_to(ROOT)}" for path in required if not path.exists()]
+    if missing:
+        return missing
+
+    verification_text = read(verification)
+    evidence_text = read(evidence)
+    rag_text = read(rag)
+    migration_text = read(migration)
+    unit_text = read(unit_tests)
+    persistence_text = read(persistence_tests)
+    secrecy_text = read(secrecy_tests)
+
+    errors: list[str] = []
+    for status in ("supported", "contradicted", "insufficient", "not_evaluated"):
+        if status not in verification_text or status not in migration_text:
+            errors.append(f"claim verification status contract missing: {status}")
+
+    if "verification_source_unavailable" not in verification_text:
+        errors.append("missing explicit unavailable-evidence verification result")
+    if "claim contradicted by cited evidence" not in verification_text:
+        errors.append("contradicted claims must fail validation")
+    if "claim has insufficient cited evidence" not in verification_text:
+        errors.append("insufficient material claims must enter correction/failure handling")
+    if "claim_evidence_is_publishable" not in evidence_text or "claim_evidence_is_publishable" not in rag_text:
+        errors.append("RAG publication must be gated by claim evidence")
+    if "process_summary_claim_evidence_excerpts" not in migration_text:
+        errors.append("literal verification excerpts must have a dedicated audit table")
+    if "evidence_excerpt_sha256" not in migration_text:
+        errors.append("verification relations must persist excerpt hashes")
+
+    required_unit_cases = (
+        "test_process_amount_mismatch_is_contradicted",
+        "test_missing_deterministic_date_is_insufficient_and_retryable",
+        "test_unanchored_intrinsically_material_claim_is_retryable",
+        "test_attachment_verification_preserves_available_positions_and_excerpt_hash",
+    )
+    for test_name in required_unit_cases:
+        if test_name not in unit_text:
+            errors.append(f"missing claim-verification regression test: {test_name}")
+
+    if "test_second_invalid_generation_is_persisted_as_failed_validation" not in persistence_text:
+        errors.append("second failed validation must be persisted explicitly")
+    if "local-deterministic" not in secrecy_text or "is_restricted_local_summary" not in secrecy_text:
+        errors.append("restricted-process pipeline must remain deterministic and provider-free")
+
+    return errors
+
+
 def embedding_invariant_violations() -> list[str]:
     embeddings = ROOT / "app" / "embeddings.py"
     schema = ROOT / "sql" / "002_process_data.sql"
@@ -328,6 +398,7 @@ def main() -> int:
         ("app/queue.py", queue_invariant_violations),
         ("app/processes.py", process_durability_violations),
         ("app/rag.py", rag_invariant_violations),
+        ("app/claim_verification.py", claim_verification_invariant_violations),
         ("app/embeddings.py", embedding_invariant_violations),
         ("app/api.py", webhook_invariant_violations),
         ("compose.production.yaml", deployment_invariant_violations),
