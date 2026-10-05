@@ -83,7 +83,8 @@ The repository ships `docs/governance/lgpd-approval-record.example.json` as a te
 `scripts/lgpd_governance_readiness.py` as a fail-closed validator for a **private** approval
 record. The populated record must not be committed to Git. It stores references and approval
 states only; secret-bearing fields are rejected. The validator deliberately reads the record from
-standard input rather than opening a caller-supplied path.
+standard input rather than opening a caller-supplied path, and CLI output never echoes approval-record
+fields or values.
 
 Before mass indexing, the deployment operator can validate the externally approved record with:
 
