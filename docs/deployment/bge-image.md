@@ -26,3 +26,23 @@ After the build, run the normal image runtime smoke plus the BGE verifier agains
 The same `RPY_IMAGE` digest continues to be used by migrate, API, workers and scheduler. This deliberately favors one auditable release artifact over service-specific application images. Non-worker services simply carry the unused BGE dependency layer.
 
 Do not enable BGE solely because the image builds. The historical reindex and retrieval-quality benchmark required by issue #124 remain separate rollout gates.
+
+
+## Embedding artifact evidence
+
+For issue #124 deployment evidence, run the verifier in evidence mode against the mounted local
+artifact:
+
+```sh
+python scripts/verify_bge_image_runtime.py \
+  --model-dir "$BGE_EMBEDDING_PATH" \
+  --evidence-json > bge-embedding-artifact-evidence.json
+```
+
+The JSON report is emitted only after the offline/runtime/path contract passes. It records the
+canonical model identifier, locked FlagEmbedding version, `config.json` SHA-256, and a deterministic
+manifest hash covering every file in the local artifact. This binds later reindex and retrieval
+quality evidence to exact model bytes without downloading anything from a model hub.
+
+The artifact report does not replace the historical reindex or retrieval-quality evaluation required
+by #124; it makes the artifact side of that acceptance mechanically auditable.
