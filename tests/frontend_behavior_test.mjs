@@ -494,4 +494,18 @@ await scenario("section navigation links shift focus to target headings", async 
   assert.equal(ui.elements["case-data-title"].focused, true);
 });
 
+await scenario("copy button resets label cleanly on rapid repeated clicks", async () => {
+  const ui = createHarness([jsonResponse(200, readyPayload())]);
+  await ui.search();
+
+  await ui.click("copy-summary");
+  assert.equal(ui.elements["copy-summary"].textContent, "Resumo copiado");
+
+  await ui.click("copy-summary");
+  assert.equal(ui.elements["copy-summary"].textContent, "Resumo copiado");
+
+  await ui.tick();
+  assert.equal(ui.elements["copy-summary"].textContent, "Copiar resumo");
+});
+
 console.log("frontend behavior harness: PASS");
