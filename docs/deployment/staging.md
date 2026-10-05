@@ -71,6 +71,24 @@ The workflow:
 
 The workflow does **not** deploy infrastructure, mutate staging data, or create a paid Judit request.
 
+## Local provider-free readiness fallback
+
+If GitHub Actions is unavailable, queued, or blocked by platform billing/account state, the public
+transport portion of staging readiness can still be checked mechanically from an operator machine
+without creating any provider request:
+
+```powershell
+py -3.12 scripts/staging_readiness_local.py --base-url https://staging.example
+```
+
+The probe requires HTTPS `/health` and `/ready` to return HTTP 200, then posts an empty body to a
+deliberately invalid Judit webhook token and requires HTTP 404. It never uses the real webhook token
+and reports `paid provider requests: 0`.
+
+This local probe is evidence for ingress/API transport only. It does not replace repository CI,
+Compose/env validation, image attestation, provider lifecycle evidence, backup/restore, or the
+required GitHub branch-protection checks.
+
 ## Deployment boundary
 
 Provider-specific deployment automation should be added only after the target hosting platform is
