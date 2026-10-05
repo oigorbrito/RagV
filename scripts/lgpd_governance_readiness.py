@@ -126,15 +126,13 @@ def main() -> int:
 
     try:
         record = load_record(sys.stdin.read())
-    except GovernanceReadinessError as exc:
-        print(f"LGPD governance readiness: BLOCKED\n - {exc}")
+    except GovernanceReadinessError:
+        print("LGPD governance readiness: BLOCKED")
         return 1
 
     errors = validate_approval_record(record)
     if errors:
-        print("LGPD governance readiness: BLOCKED")
-        for error in errors:
-            print(f" - {error}")
+        print(f"LGPD governance readiness: BLOCKED ({len(errors)} validation errors)")
         return 1
 
     print("LGPD governance readiness: APPROVED")
