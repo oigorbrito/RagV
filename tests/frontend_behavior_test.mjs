@@ -453,4 +453,19 @@ await scenario("credential toggle updates accessible label and markup includes f
   assert.equal(ui.elements["toggle-token"].getAttribute("aria-label"), "Mostrar token de acesso");
 });
 
+await scenario("bearer token field submits search on Enter", async () => {
+  const ui = createHarness([jsonResponse(200, readyPayload())]);
+  ui.elements["process-code"].value = VALID_CODE;
+  ui.elements["bearer-token"].value = TOKEN;
+
+  const handler = ui.elements["bearer-token"].listeners.keydown;
+  assert.equal(typeof handler, "function");
+  let prevented = false;
+  await handler({ key: "Enter", preventDefault() { prevented = true; } });
+
+  assert.equal(prevented, true);
+  assert.equal(ui.requests.length, 1);
+  assert.equal(ui.requests[0].url, `/processes/${encodeURIComponent(VALID_CODE)}`);
+});
+
 console.log("frontend behavior harness: PASS");
