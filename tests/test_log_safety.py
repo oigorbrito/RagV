@@ -44,6 +44,18 @@ def test_sanitize_error_message_redacts_uri_password_and_bearer() -> None:
     assert "Authorization: Bearer [REDACTED]" in rendered
 
 
+def test_sanitize_error_message_redacts_empty_user_uri_passwords() -> None:
+    rendered = sanitize_error_message(
+        "failed postgresql://:db-super-secret@postgres:5432/rpy "
+        "redis://:topsecret@redis.internal:6379/0"
+    )
+
+    assert "db-super-secret" not in rendered
+    assert "topsecret" not in rendered
+    assert "postgresql://:[REDACTED]@postgres:5432/rpy" in rendered
+    assert "redis://:[REDACTED]@redis.internal:6379/0" in rendered
+
+
 def test_sanitize_error_message_is_bounded() -> None:
     rendered = sanitize_error_message("x" * 5000, max_chars=120)
 
@@ -91,6 +103,52 @@ def test_sanitize_error_message_redacts_demo_bearer_token(monkeypatch) -> None:
     assert REDACTED in rendered
 
 
+def test_sanitize_error_message_redacts_pgpassword(monkeypatch) -> None:
+    monkeypatch.setenv("PGPASSWORD", "pg-secret-pass-789")
+
+    rendered = sanitize_error_message("failed connection with pg-secret-pass-789")
+
+    assert "pg-secret-pass-789" not in rendered
+    assert REDACTED in rendered
+
+
+def test_sanitize_error_message_redacts_judit_callback_url(monkeypatch) -> None:
+    callback_url = "https://staging.example.invalid/webhooks/judit/secret-callback-token-789"
+    monkeypatch.setenv("JUDIT_CALLBACK_URL", callback_url)
+
+    rendered = sanitize_error_message(f"callback request to {callback_url} failed")
+
+    assert callback_url not in rendered
+    assert REDACTED in rendered
+
+
+def test_sanitize_error_message_redacts_structured_bearer_credentials() -> None:
+    rendered = sanitize_error_message(
+        'request failed with bearer: opaque-bearer-token-123 and "bearer": "opaque-bearer-token-456"'
+    )
+
+    assert "opaque-bearer-token-123" not in rendered
+    assert "opaque-bearer-token-456" not in rendered
+    assert f"bearer: {REDACTED}" in rendered
+    assert f'"bearer": "{REDACTED}"' in rendered
+
+
+def test_sanitize_error_message_redacts_compound_secret_keys() -> None:
+    rendered = sanitize_error_message(
+        "failed with secret_key=secret_val_123, private_key=priv_val_456, "
+        "client_secret=client_val_789 and refresh_token=refresh_val_012"
+    )
+
+    assert "secret_val_123" not in rendered
+    assert "priv_val_456" not in rendered
+    assert "client_val_789" not in rendered
+    assert "refresh_val_012" not in rendered
+    assert "secret_key=[REDACTED]" in rendered
+    assert "private_key=[REDACTED]" in rendered
+    assert "client_secret=[REDACTED]" in rendered
+    assert "refresh_token=[REDACTED]" in rendered
+
+
 @pytest.mark.parametrize("scheme", ["Bearer", "APIKey", "Basic", "Token", "Digest", "Negotiate", "OAuth"])
 def test_sanitize_error_message_redacts_authorization_schemes(scheme: str) -> None:
     rendered = sanitize_error_message(
@@ -106,7 +164,10 @@ _CREDENTIAL_ALPHABET = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123
 
 @settings(max_examples=120, deadline=None)
 @given(
-    key=st.sampled_from(("api_key", "api-key", "token", "access_token", "password", "secret")),
+    key=st.sampled_from((
+        "api_key", "api-key", "token", "access_token", "bearer", "password", "secret",
+        "secret_key", "private_key", "client_secret", "refresh_token", "auth_token", "access_key",
+    )),
     key_quote=st.sampled_from(("", '"', "'")),
     value_quote=st.sampled_from(("", '"', "'")),
     secret=st.text(alphabet=_CREDENTIAL_ALPHABET, min_size=12, max_size=48),

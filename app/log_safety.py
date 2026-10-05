@@ -15,10 +15,12 @@ _SECRET_ENV_NAMES = (
     "COHERE_API_KEY",
     "LANGFUSE_SECRET_KEY",
     "JUDIT_WEBHOOK_TOKEN",
+    "JUDIT_CALLBACK_URL",
     "RPY_BEARER_TOKENS",
     "RPY_DEMO_BEARER_TOKEN",
     "RPY_OPS_TOKEN",
     "POSTGRES_PASSWORD",
+    "PGPASSWORD",
     "DATABASE_URL",
     "MIGRATION_DATABASE_URL",
     "API_DATABASE_URL",
@@ -29,13 +31,13 @@ _SECRET_ENV_NAMES = (
 
 # Redact credentials embedded in URLs even when the full URL is not available in
 # environment variables (for example when emitted by a lower-level client).
-_URI_CREDENTIALS_RE = re.compile(r"(?P<scheme>[a-zA-Z][a-zA-Z0-9+.-]*://)(?P<user>[^\s/:@]+):(?P<secret>[^\s/@]+)@")
+_URI_CREDENTIALS_RE = re.compile(r"(?P<scheme>[a-zA-Z][a-zA-Z0-9+.-]*://)(?P<user>[^\s/:@]*):(?P<secret>[^\s/@]+)@")
 _AUTHORIZATION_RE = re.compile(
     r"(?i)(authorization\s*[:=]\s*(?:bearer|apikey|basic|token|digest|negotiate|oauth)\s+)([^\s,;]+)"
 )
 _STRUCTURED_SECRET_RE = re.compile(
     r"""(?ix)
-    (?P<prefix>["']?(?:api[_-]?key|token|access[_-]?token|password|secret)["']?\s*[=:]\s*)
+    (?P<prefix>["']?(?:api[_-]?key|secret[_-]?key|private[_-]?key|access[_-]?key|app[_-]?key|auth[_-]?key|signing[_-]?key|encryption[_-]?key|client[_-]?secret|app[_-]?secret|auth[_-]?token|refresh[_-]?token|bearer[_-]?token|session[_-]?token|id[_-]?token|user[_-]?token|api[_-]?token|access[_-]?token|bearer|token|password|secret)["']?\s*[=:]\s*)
     (?P<quote>["']?)
     (?P<secret>[^"'\s,;&}\]]+)
     (?P=quote)
