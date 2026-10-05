@@ -42,7 +42,7 @@ LANGFUSE_ENVIRONMENT_RE = re.compile(r"^(?!langfuse)[a-z0-9_-]{1,40}$")
 EGRESS_HOST_RE = re.compile(r"^[a-z0-9.-]{1,253}$")
 _BASE_EGRESS_HOSTS = {
     "api.anthropic.com",
-    "requests.production.judit.io",
+    "requests.prod.judit.io",
     "tracking.production.judit.io",
 }
 
