@@ -165,6 +165,7 @@ def _cnjs(text: str) -> frozenset[str]:
     return frozenset(_canonical_cnj(match.group(0)) for match in _CNJ_RE.finditer(text))
 
 
+@lru_cache(maxsize=512)
 def _canonical_date(value: str) -> str | None:
     for fmt in ("%Y-%m-%d", "%d/%m/%Y"):
         try:
@@ -244,7 +245,7 @@ def _party_names_in_text(text: str, known: frozenset[str]) -> frozenset[str]:
     return frozenset(
         name
         for name in known
-        if _party_name_regex(name).search(normalized)
+        if name in normalized and _party_name_regex(name).search(normalized)
     )
 
 

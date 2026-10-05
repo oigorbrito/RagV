@@ -6,6 +6,7 @@ import unicodedata
 from dataclasses import dataclass
 from datetime import datetime
 from decimal import Decimal
+from functools import lru_cache
 from typing import Any
 from zoneinfo import ZoneInfo
 
@@ -96,7 +97,12 @@ def _normalize_digits(value: str) -> str:
     return "".join(character for character in value if character.isdigit())
 
 
-def _normalize_party_name(value: str) -> str:
+def _normalize_party_name(value: Any) -> str:
+    return _cached_normalize_party_name(str(value or ""))
+
+
+@lru_cache(maxsize=2048)
+def _cached_normalize_party_name(value: str) -> str:
     decomposed = unicodedata.normalize("NFKD", value)
     without_marks = "".join(
         character for character in decomposed if not unicodedata.combining(character)
@@ -353,6 +359,7 @@ def _untrusted_output_errors(text: str, source_text: str) -> list[str]:
     return errors
 
 
+@lru_cache(maxsize=512)
 def _canonical_date(value: str) -> str | None:
     for fmt in ("%Y-%m-%d", "%d/%m/%Y"):
         try:
