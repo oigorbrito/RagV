@@ -30,12 +30,12 @@ qualification.
 | Release smoke | provider-free offline release smoke | ready |
 | Production preflight | deploy environment + Compose validators | ready |
 | Judit transport | real request/polling/lawsuit response evidence | accepted |
-| Judit callback ingress | real public HTTPS callback → staging/persistence/tenant grant | accepted |
+| Judit callback ingress | public HTTPS transport accepted; current persistent-staging callback exposed stale ingress→API addressing | hardening in #444 |
 | Internal finalization | replay + PostgreSQL E2E + offline Judit-to-summary smoke | ready |
 | Production callback config | `JUDIT_CALLBACK_URL` required/validated and injected into workers | ready |
 | Persistent staging gate | `.github/workflows/staging-readiness.yml` + staging contract | ready |
-| Current immutable image | exact current/frozen release-head digest | **not yet published/selected** |
-| Persistent staging host | stable host/domain/environment secrets | **not yet provisioned** |
+| Current immutable image | `ghcr.io/oigorbrito/rpy@sha256:5945b301edde901814579190440f68cd1559bd03defb647fa723e6ff7d2b6ac1` | selected for staging acceptance |
+| Persistent staging host | local persistent Docker/Compose target with stable HTTPS Funnel ingress and secrets outside Git | provisioned |
 
 “Ready” means the repository has deterministic evidence or a controlled operational procedure.
 It does not mean an external provider, legal authority, or production environment has approved
@@ -75,7 +75,7 @@ CNJ will have metadata.
 
 | Boundary | Repository support | Still required outside repository |
 |---|---|---|
-| Persistent staging | production Compose + readiness workflow | host, domain/TLS, secrets, immutable image digest |
+| Persistent staging | production Compose + readiness workflow + selected immutable digest + stable HTTPS ingress | finish ingress hardening, callback/finalization evidence and backup restore |
 | Judit | request/callback/finalization contracts accepted | target-environment credentials/budget and lifecycle observation |
 | DataJud | optional enrichment + authorization gate | applicable authorization/current key |
 | Anthropic | model routing/retry/validation/secrecy boundary | target key/budget + controlled live acceptance |
