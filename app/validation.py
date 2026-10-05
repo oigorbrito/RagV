@@ -97,11 +97,6 @@ def _normalize_digits(value: str) -> str:
     return "".join(character for character in value if character.isdigit())
 
 
-def _normalize_party_name(value: Any) -> str:
-    rendered = str(value or "")
-    return _cached_normalize_party_name(rendered)
-
-
 @lru_cache(maxsize=2048)
 def _cached_normalize_party_name(value: str) -> str:
     decomposed = unicodedata.normalize("NFKD", value)
@@ -110,6 +105,11 @@ def _cached_normalize_party_name(value: str) -> str:
     )
     words = re.findall(r"[\w]+", without_marks.casefold(), flags=re.UNICODE)
     return " ".join(words)
+
+
+# Memoize party name normalization to avoid repeated unicodedata NFKD decomposition and regex parsing.
+def _normalize_party_name(value: Any) -> str:
+    return _cached_normalize_party_name(str(value or "").strip())
 
 
 def _party_names(parties: list[dict[str, Any]]) -> set[str]:
