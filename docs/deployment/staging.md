@@ -184,6 +184,24 @@ Next:
 6. run `staging-readiness`;
 7. configure `PAGES_API_BASE_URL` to the stable backend HTTPS origin and redeploy Pages.
 
+## Acceptance evidence record
+
+Use `docs/deployment/staging-acceptance-record.example.json` as the non-secret evidence template for
+the persistent staging acceptance. Populate a private copy with factual results and validate it with:
+
+```powershell
+Get-Content -Raw .\staging-acceptance-record.json |
+  py -3.12 scripts/validate_staging_acceptance_record.py --stdin
+```
+
+The validator requires immutable deployed/rollback image digests, migration/readiness/browser/callback/
+finalization/summary/backup/restore evidence, attachments disabled, DataJud disabled, and exactly one
+paid Judit request in this acceptance history. It rejects secret-bearing fields and does not accept a
+second Judit request as a substitute for missing callback evidence.
+
+The populated record may be retained in the operator's private evidence store. Do not commit secrets,
+raw provider request IDs, webhook tokens, database credentials or real process payloads.
+
 ## Target-environment acceptance
 
 After `staging-readiness` is green, perform one bounded target-environment acceptance:
