@@ -64,6 +64,6 @@ def test_naive_approval_timestamp_is_rejected() -> None:
 
 def test_secret_bearing_fields_are_rejected() -> None:
     record = _valid_record()
-    record["provider_api_key"] = "must-never-be-stored-here"
+    record["provider_api_key"] = "x"
     errors = module.validate_approval_record(record)
     assert any("secret-bearing field is prohibited" in error for error in errors)
