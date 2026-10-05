@@ -440,4 +440,32 @@ await scenario("CNJ heading uses sans-serif tabular numerals for legibility", as
   assert.match(css, /\.process-header h2\{[^}]*ui-sans-serif[^}]*font-variant-numeric:tabular-nums/);
 });
 
+await scenario("credential toggle updates accessible label and markup includes field error alert roles", async () => {
+  const html = fs.readFileSync("app/frontend/index.html", "utf8");
+  assert.match(html, /id="process-code-error"[^>]*role="alert"/);
+  assert.match(html, /id="token-error"[^>]*role="alert"/);
+  assert.match(html, /id="toggle-token"[^>]*aria-controls="bearer-token"/);
+
+  const ui = createHarness([jsonResponse(200, readyPayload())]);
+  await ui.click("toggle-token");
+  assert.equal(ui.elements["toggle-token"].getAttribute("aria-label"), "Ocultar token de acesso");
+  await ui.click("toggle-token");
+  assert.equal(ui.elements["toggle-token"].getAttribute("aria-label"), "Mostrar token de acesso");
+});
+
+await scenario("bearer token field submits search on Enter", async () => {
+  const ui = createHarness([jsonResponse(200, readyPayload())]);
+  ui.elements["process-code"].value = VALID_CODE;
+  ui.elements["bearer-token"].value = TOKEN;
+
+  const handler = ui.elements["bearer-token"].listeners.keydown;
+  assert.equal(typeof handler, "function");
+  let prevented = false;
+  await handler({ key: "Enter", preventDefault() { prevented = true; } });
+
+  assert.equal(prevented, true);
+  assert.equal(ui.requests.length, 1);
+  assert.equal(ui.requests[0].url, `/processes/${encodeURIComponent(VALID_CODE)}`);
+});
+
 console.log("frontend behavior harness: PASS");
