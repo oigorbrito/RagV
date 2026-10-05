@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import argparse
 import json
+import sys
 from datetime import datetime
-from pathlib import Path
 from typing import Any
 
 REQUIRED_REFERENCES = (
@@ -101,13 +101,11 @@ def validate_approval_record(record: dict[str, Any]) -> list[str]:
     return errors
 
 
-def load_record(path: Path) -> dict[str, Any]:
+def load_record(raw_text: str) -> dict[str, Any]:
     try:
-        raw = json.loads(path.read_text(encoding="utf-8"))
-    except FileNotFoundError as exc:
-        raise GovernanceReadinessError(f"approval file not found: {path}") from exc
+        raw = json.loads(raw_text)
     except json.JSONDecodeError as exc:
-        raise GovernanceReadinessError("approval file must contain valid JSON") from exc
+        raise GovernanceReadinessError("approval input must contain valid JSON") from exc
     if not isinstance(raw, dict):
         raise GovernanceReadinessError("approval record must be a JSON object")
     return raw
@@ -117,11 +115,17 @@ def main() -> int:
     parser = argparse.ArgumentParser(
         description="Validate a private LGPD/data-governance approval record before mass indexing."
     )
-    parser.add_argument("--approval-file", type=Path, required=True)
+    parser.add_argument(
+        "--stdin",
+        action="store_true",
+        help="Read the private approval record JSON from standard input",
+    )
     args = parser.parse_args()
+    if not args.stdin:
+        parser.error("--stdin is required; private approval records are not accepted by path")
 
     try:
-        record = load_record(args.approval_file)
+        record = load_record(sys.stdin.read())
     except GovernanceReadinessError as exc:
         print(f"LGPD governance readiness: BLOCKED\n - {exc}")
         return 1
