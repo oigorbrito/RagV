@@ -328,18 +328,38 @@ def _amount_claim_errors(text: str, source_text: str) -> list[str]:
     return errors
 
 
+def _movement_source_text(source_text: str) -> str:
+    try:
+        payload = json.loads(source_text)
+    except (json.JSONDecodeError, TypeError):
+        return ""
+    if not isinstance(payload, dict):
+        return ""
+    movements = payload.get("movimentos")
+    if not isinstance(movements, list):
+        return ""
+    return json.dumps(movements, ensure_ascii=False, default=str)
+
+
 def _source_backed_claim_errors(text: str, source_text: str) -> list[str]:
     normalized_source = f" {_normalize_party_name(source_text)} "
+    normalized_movements = f" {_normalize_party_name(_movement_source_text(source_text))} "
     errors: list[str] = []
     for match in _SOURCE_BACKED_CLAIM_RE.finditer(text):
         label = match.group("label").strip()
+        normalized_label = _normalize_party_name(label)
         raw_value = match.group("value").strip()
         values = [raw_value]
-        if _normalize_party_name(label) in {"assunto", "assuntos", "tag", "tags"}:
+        if normalized_label in {"assunto", "assuntos", "tag", "tags"}:
             values = [part.strip() for part in re.split(r"[,;]", raw_value) if part.strip()]
+        evidence = (
+            normalized_movements
+            if normalized_label in {"justica gratuita", "gratuidade"}
+            else normalized_source
+        )
         for value in values:
             normalized_value = _normalize_party_name(value)
-            if normalized_value and f" {normalized_value} " not in normalized_source:
+            if normalized_value and f" {normalized_value} " not in evidence:
                 errors.append(f"source-backed field mismatch: {label}={value}")
     return errors
 
