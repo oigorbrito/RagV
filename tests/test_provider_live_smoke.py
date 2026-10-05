@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import os
 import importlib.util
 import sys
 from pathlib import Path
@@ -201,6 +202,69 @@ def test_main_provider_exception_emits_sanitized_json_error(
         raise AssertionError(f"unexpected report: {report!r}")
     if "secret-value" in rendered:
         raise AssertionError("provider exception text must not leak into machine-readable output")
+
+
+def test_judit_smoke_can_persist_request_id_without_exposing_it(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    request_id = "provider-request-secret-123"
+    request_id_file = tmp_path / "private" / "judit-request-id"
+
+    async def fake_create(_code: str):
+        return SimpleNamespace(request_id=request_id)
+
+    monkeypatch.setenv("JUDIT_API_KEY", "test-key")
+    monkeypatch.setenv("PROVIDER_ACCEPTANCE_AUTHORIZED", "true")
+    monkeypatch.setenv("JUDIT_ATTACHMENTS_ENABLED", "false")
+    monkeypatch.setattr(smoke, "create_lawsuit_request", fake_create)
+
+    report = asyncio.run(
+        smoke._smoke_judit(
+            "0000000-00.2026.8.21.0001",
+            request_id_file=request_id_file,
+        )
+    )
+
+    assert report["status"] == "request_created"
+    assert report["request_id_persisted"] is True
+    assert report["request_id_sha256"] == smoke._hash_identifier(request_id)
+    assert "request_id" not in report
+    assert request_id_file.read_text(encoding="utf-8") == request_id + "\n"
+    if os.name != "nt":
+        assert request_id_file.stat().st_mode & 0o777 == 0o600
+
+
+def test_judit_roundtrip_persists_request_id_before_observation(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    request_id_file = tmp_path / "judit-request-id"
+
+    async def fake_create(_code: str):
+        return SimpleNamespace(request_id="provider-request-123")
+
+    async def fail_observe(_request_id: str, *, post_calls: int):
+        assert request_id_file.read_text(encoding="utf-8") == "provider-request-123\n"
+        assert post_calls == 1
+        raise RuntimeError("observation failed")
+
+    monkeypatch.setenv("JUDIT_API_KEY", "test-key")
+    monkeypatch.setenv("PROVIDER_ACCEPTANCE_AUTHORIZED", "true")
+    monkeypatch.setenv("JUDIT_ATTACHMENTS_ENABLED", "false")
+    monkeypatch.setattr(smoke, "create_lawsuit_request", fake_create)
+    monkeypatch.setattr(smoke, "_observe_judit_request", fail_observe)
+
+    with pytest.raises(RuntimeError, match="observation failed"):
+        asyncio.run(
+            smoke._smoke_judit_roundtrip(
+                "0000000-00.2026.8.21.0001",
+                request_id_file=request_id_file,
+            )
+        )
+
+    if os.name != "nt":
+        assert request_id_file.stat().st_mode & 0o777 == 0o600
 
 
 def test_both_preflight_requires_all_credentials_before_any_network(
