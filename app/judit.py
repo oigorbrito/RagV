@@ -5,6 +5,7 @@ import re
 import unicodedata
 from dataclasses import dataclass
 from datetime import datetime, timezone
+from functools import lru_cache
 from typing import Any
 from zoneinfo import ZoneInfo
 
@@ -230,7 +231,12 @@ def _masked_personal_id(value: str) -> str:
 
 
 def _normalized_person_type(value: Any) -> str:
-    rendered = unicodedata.normalize("NFKD", str(value or "").strip())
+    return _cached_normalized_person_type(str(value or "").strip())
+
+
+@lru_cache(maxsize=1024)
+def _cached_normalized_person_type(rendered_value: str) -> str:
+    rendered = unicodedata.normalize("NFKD", rendered_value)
     ascii_value = "".join(
         character
         for character in rendered
