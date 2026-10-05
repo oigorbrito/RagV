@@ -42,17 +42,17 @@ def _parse_approved_at(value: Any) -> None:
         raise GovernanceReadinessError("approved_at must include a timezone")
 
 
-def _scan_for_secret_keys(value: Any, *, path: str = "$") -> list[str]:
+def _scan_for_secret_keys(value: Any) -> list[str]:
     errors: list[str] = []
     if isinstance(value, dict):
         for key, child in value.items():
             normalized = str(key).strip().casefold().replace("-", "_")
             if any(fragment in normalized for fragment in FORBIDDEN_KEY_FRAGMENTS):
-                errors.append(f"secret-bearing field is prohibited: {path}.{key}")
-            errors.extend(_scan_for_secret_keys(child, path=f"{path}.{key}"))
+                errors.append("secret-bearing field is prohibited")
+            errors.extend(_scan_for_secret_keys(child))
     elif isinstance(value, list):
-        for index, child in enumerate(value):
-            errors.extend(_scan_for_secret_keys(child, path=f"{path}[{index}]"))
+        for child in value:
+            errors.extend(_scan_for_secret_keys(child))
     return errors
 
 
