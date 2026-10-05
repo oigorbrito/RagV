@@ -82,12 +82,13 @@ Before enabling production mass indexing, record approval outside the repository
 The repository ships `docs/governance/lgpd-approval-record.example.json` as a template and
 `scripts/lgpd_governance_readiness.py` as a fail-closed validator for a **private** approval
 record. The populated record must not be committed to Git. It stores references and approval
-states only; secret-bearing fields are rejected.
+states only; secret-bearing fields are rejected. The validator deliberately reads the record from
+standard input rather than opening a caller-supplied path.
 
 Before mass indexing, the deployment operator can validate the externally approved record with:
 
 ```text
-python scripts/lgpd_governance_readiness.py --approval-file <private-approval-record.json>
+Get-Content -Raw <private-approval-record.json> | py -3.12 scripts/lgpd_governance_readiness.py --stdin
 ```
 
 A successful result proves only that the required governance decisions were explicitly recorded
