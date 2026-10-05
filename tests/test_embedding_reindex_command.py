@@ -129,3 +129,76 @@ async def test_reindex_rejects_nonpositive_batch_size() -> None:
 
     with pytest.raises(ValueError, match="version batch limit must be positive"):
         await _REINDEX.reindex_batch(pool, runtime=runtime, limit=0)
+
+
+@pytest.mark.asyncio
+async def test_reindex_all_accumulates_batches(monkeypatch: pytest.MonkeyPatch) -> None:
+    first = uuid4()
+    second = uuid4()
+    reports = iter(
+        [
+            {
+                "space": "bge:BAAI/bge-m3:1024",
+                "dry_run": False,
+                "versions_seen": 2,
+                "versions_with_missing": 1,
+                "embeddings_written": 3,
+                "next_after_version_id": str(first),
+                "has_more": True,
+            },
+            {
+                "space": "bge:BAAI/bge-m3:1024",
+                "dry_run": False,
+                "versions_seen": 1,
+                "versions_with_missing": 1,
+                "embeddings_written": 2,
+                "next_after_version_id": str(second),
+                "has_more": False,
+            },
+        ]
+    )
+    checkpoints = []
+
+    async def fake_batch(pool, *, runtime, limit, after_version_id, dry_run):
+        checkpoints.append(after_version_id)
+        return next(reports)
+
+    monkeypatch.setattr(_REINDEX, "reindex_batch", fake_batch)
+    runtime = FakeRuntime()
+    report = await _REINDEX.reindex_all(object(), runtime=runtime, limit=2)
+
+    assert checkpoints == [None, first]
+    assert report["batches"] == 2
+    assert report["versions_seen"] == 3
+    assert report["versions_with_missing"] == 2
+    assert report["embeddings_written"] == 5
+    assert report["completed"] is True
+    assert report["last_version_id"] == str(second)
+
+
+@pytest.mark.asyncio
+async def test_reindex_all_rejects_repeated_checkpoint(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    checkpoint = uuid4()
+    calls = 0
+
+    async def fake_batch(pool, *, runtime, limit, after_version_id, dry_run):
+        nonlocal calls
+        calls += 1
+        return {
+            "space": runtime.space.key,
+            "dry_run": dry_run,
+            "versions_seen": 1,
+            "versions_with_missing": 1,
+            "embeddings_written": 0,
+            "next_after_version_id": str(checkpoint),
+            "has_more": True,
+        }
+
+    monkeypatch.setattr(_REINDEX, "reindex_batch", fake_batch)
+    runtime = FakeRuntime()
+
+    with pytest.raises(RuntimeError, match="checkpoint repeated"):
+        await _REINDEX.reindex_all(object(), runtime=runtime, limit=1, dry_run=True)
+    assert calls == 2

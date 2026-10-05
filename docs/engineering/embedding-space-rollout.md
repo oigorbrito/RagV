@@ -48,6 +48,22 @@ Existing vectors from other spaces remain untouched for controlled rollback or l
 
 Historical reindexing follows the same provider/model isolation. Cohere reindexing excludes secret process versions, and the embedding runtime independently rejects external embedding of a secret version before movement text is sent to the provider.
 
+## Complete historical reindex command
+
+For the selected embedding space, the reindex tool can advance through every resumable batch
+without an operator manually copying checkpoints:
+
+```bash
+python scripts/reindex_embedding_space.py --all --limit 25
+```
+
+Use `--dry-run --all` first on the target database to count incomplete versions without writing
+vectors. The command fails if its checkpoint stops advancing. Its final JSON report records batch
+count, versions inspected, versions with missing embeddings and embeddings written.
+
+This is evidence only for the database/environment where it runs. BGE activation still requires the
+real local artifact and retrieval-quality evidence.
+
 ## Rollback
 
 To roll back during migration, disable `EMBEDDING_SPACE_RUNTIME_ENABLED` and keep the existing OpenAI configuration. The legacy `process_steps.embedding` column remains unchanged by the new runtime.
