@@ -77,6 +77,25 @@ Before enabling production mass indexing, record approval outside the repository
 - [ ] repository/CI fixtures remain synthetic and contain no production secrets or real process payloads;
 - [ ] responsible legal/data-governance approver signs off on this evidence pack and the external contractual documents.
 
+## Machine-checkable approval record
+
+The repository ships `docs/governance/lgpd-approval-record.example.json` as a template and
+`scripts/lgpd_governance_readiness.py` as a fail-closed validator for a **private** approval
+record. The populated record must not be committed to Git. It stores references and approval
+states only; secret-bearing fields are rejected. The validator deliberately reads the record from
+standard input rather than opening a caller-supplied path, and CLI output never echoes approval-record
+fields or values.
+
+Before mass indexing, the deployment operator can validate the externally approved record with:
+
+```text
+Get-Content -Raw <private-approval-record.json> | py -3.12 scripts/lgpd_governance_readiness.py --stdin
+```
+
+A successful result proves only that the required governance decisions were explicitly recorded
+in the expected machine-readable shape. It does not prove that those decisions are legally
+sufficient, does not inspect provider contracts, and does not authorize provider calls by itself.
+
 ## Closure boundary for #148
 
 Engineering can maintain this inventory and implement approved technical retention/authorization controls. Issue #148 must remain open until the unresolved legal/organizational items above are decided, the resulting contracts/policies are referenced or versioned appropriately, and the responsible authority explicitly approves the completed package.
