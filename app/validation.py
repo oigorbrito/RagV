@@ -64,7 +64,7 @@ _ATTENTION_HEADING_RE = re.compile(
 _NEXT_HEADING_RE = re.compile(r"^#{1,6}\s+\S", re.MULTILINE)
 _HEADING_RE = re.compile(r"^#{1,6}\s+(?P<title>.+?)\s*$", re.MULTILINE)
 _SOURCE_BACKED_CLAIM_RE = re.compile(
-    r"^(?:[-*]\s*)?(?P<label>Área|Assuntos?|Tags?|Comarca|Órgão julgador|Classe|Fase)\s*:\s*(?P<value>.+?)\s*$",
+    r"^(?:[-*]\s*)?(?P<label>Área|Assuntos?|Tags?|Comarca|Órgão julgador|Classe|Fase|Rito|Justiça gratuita|Gratuidade)\s*:\s*(?P<value>.+?)\s*$",
     re.IGNORECASE | re.MULTILINE,
 )
 _AMOUNT_CLAIM_RE = re.compile(
