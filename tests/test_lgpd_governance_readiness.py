@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import importlib.util
 from pathlib import Path
+from uuid import uuid4
 
 _SCRIPT = (
     Path(__file__).resolve().parents[1]
@@ -64,6 +65,6 @@ def test_naive_approval_timestamp_is_rejected() -> None:
 
 def test_secret_bearing_fields_are_rejected() -> None:
     record = _valid_record()
-    record["provider_api_key"] = "x"
+    record["provider_api_key"] = uuid4().hex
     errors = module.validate_approval_record(record)
     assert any("secret-bearing field is prohibited" in error for error in errors)
