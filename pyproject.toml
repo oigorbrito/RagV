@@ -43,7 +43,7 @@ embeddings = [
   "FlagEmbedding>=1.4.2,<1.5",
 ]
 observability = [
-  "langfuse>=4.7,<5",
+  "langfuse>=4.16.0,<5",
 ]
 
 [project.urls]
