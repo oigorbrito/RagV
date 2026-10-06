@@ -127,11 +127,13 @@ function createHarness(fetchResponses, { apiBase = "same-origin" } = {}) {
   let clipboardText = "";
 
   const navLinks = [
-    { href: "#summary-title", listeners: {} },
-    { href: "#case-data-title", listeners: {} },
-    { href: "#movements-title", listeners: {} },
+    { href: "#summary-title", attributes: new Map(), listeners: {} },
+    { href: "#case-data-title", attributes: new Map(), listeners: {} },
+    { href: "#movements-title", attributes: new Map(), listeners: {} },
   ].map(link => ({
-    getAttribute(name) { return name === "href" ? link.href : null; },
+    getAttribute(name) { return name === "href" ? link.href : link.attributes.get(name) ?? null; },
+    setAttribute(name, value) { link.attributes.set(name, String(value)); },
+    removeAttribute(name) { link.attributes.delete(name); },
     addEventListener(type, handler) { link.listeners[type] = handler; },
     listeners: link.listeners,
   }));
@@ -190,6 +192,7 @@ function createHarness(fetchResponses, { apiBase = "same-origin" } = {}) {
 
   return {
     elements,
+    document: context.document,
     requests,
     clipboard: () => clipboardText,
     hasTimer: () => timers.size > 0,
@@ -487,11 +490,15 @@ await scenario("bearer token field submits search on Enter", async () => {
   assert.equal(ui.requests[0].url, `/processes/${encodeURIComponent(VALID_CODE)}`);
 });
 
-await scenario("section navigation links shift focus to target headings", async () => {
+await scenario("section navigation links shift focus to target headings and update aria-current", async () => {
   const ui = createHarness([jsonResponse(200, readyPayload())]);
   await ui.search();
+  const links = ui.document.querySelectorAll(".document-nav a");
+  assert.equal(links[0].getAttribute("aria-current"), "true");
   await ui.clickNavLink(1);
   assert.equal(ui.elements["case-data-title"].focused, true);
+  assert.equal(links[0].getAttribute("aria-current"), null);
+  assert.equal(links[1].getAttribute("aria-current"), "true");
 });
 
 await scenario("copy button resets label cleanly on rapid repeated clicks", async () => {
