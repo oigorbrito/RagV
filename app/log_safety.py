@@ -43,10 +43,10 @@ _STRUCTURED_SECRET_RE = re.compile(
     (?P=quote)
     """
 )
-# Redact application/provider API keys even when not configured in env or when
-# appearing without authorization headers or query parameter names.
+# Redact application/provider API keys and JWT tokens even when not configured
+# in env or when appearing without authorization headers or query parameter names.
 _API_KEY_TOKEN_RE = re.compile(
-    r"\b(?:sk_(?:live|test)_[a-zA-Z0-9_-]+|sk-[a-zA-Z0-9_-]{12,})\b"
+    r"\b(?:sk_(?:live|test)_[a-zA-Z0-9_-]+|sk-[a-zA-Z0-9_-]{12,}|eyJ[a-zA-Z0-9_-]+\.eyJ[a-zA-Z0-9_-]+\.[a-zA-Z0-9_-]+)\b"
 )
 
 
