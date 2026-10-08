@@ -1,20 +1,207 @@
 <!doctype html>
 <html lang="pt-BR">
-<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="description" content="Consulta e síntese inteligente de processos judiciais."><meta property="og:title" content="Rag-V"><meta property="og:description" content="Consulta e síntese inteligente de processos judiciais."><title>Rag-V</title><link rel="stylesheet" href="app.css"></head>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Consulta e síntese inteligente de processos judiciais via Judit e Datajud.">
+<meta property="og:title" content="Rpy — Inteligência processual">
+<meta property="og:description" content="Consulta e síntese inteligente de processos judiciais via Judit e Datajud.">
+<title>Rpy — Inteligência processual</title>
+<link rel="stylesheet" href="app.css">
+</head>
 <body>
 <a class="skip-link" href="#main-content">Ir para o conteúdo</a>
-<header class="topbar"><div class="topbar-inner"><a class="brand" href="./" aria-label="Rag-V — início">Rag-V</a><span class="product-label">Inteligência processual</span><div style="margin-left:auto;display:flex;align-items:center;gap:8px;"><button id="history-trigger" class="access-trigger" type="button" aria-expanded="false" aria-controls="history-panel" style="display:inline-flex;align-items:center;gap:6px;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg><span>Histórico</span></button><button id="access-trigger" class="access-trigger" type="button" aria-expanded="true" aria-controls="auth-panel"><span class="access-dot" aria-hidden="true"></span><span id="access-label">Sessão inativa</span></button></div></div></header>
+<header class="topbar">
+  <div class="topbar-inner">
+    <a class="brand" href="./" aria-label="Rpy — início">Rpy</a>
+    <span class="product-label">Inteligência processual</span>
+    <div style="margin-left:auto;display:flex;align-items:center;gap:8px;">
+      <button id="history-trigger" class="access-trigger" type="button" aria-expanded="false" aria-controls="history-panel" style="display:inline-flex;align-items:center;gap:6px;">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+        <span>Histórico</span>
+      </button>
+      <button id="access-trigger" class="access-trigger access-status-trigger" type="button" aria-expanded="false" aria-controls="auth-panel" title="Status da credencial de usuário" aria-label="Status da credencial de usuário">
+        <span class="access-dot" aria-hidden="true"></span>
+        <span id="access-label" class="visually-hidden">Falta credencial de usuário</span>
+      </button>
+    </div>
+  </div>
+</header>
 <main id="main-content" tabindex="-1">
-<section class="workspace-intro" aria-labelledby="page-title"><p class="eyebrow">CONSULTA PROCESSUAL</p><h1 id="page-title">Consulte e sintetize um processo.</h1><p class="lede">Informe o número CNJ. Se o processo ainda não estiver disponível, você poderá solicitar explicitamente a consulta à fonte processual.</p><form id="search-form" class="search-form" novalidate><label for="process-code">Número do processo</label><div class="search-row"><input id="process-code" name="process-code" inputmode="numeric" autocomplete="off" maxlength="25" placeholder="0000000-00.0000.0.00.0000" aria-describedby="process-code-hint process-code-error" required><button id="search-submit" type="submit">Consultar processo</button></div><p id="process-code-hint" class="field-hint">Você pode colar ou digitar os 20 dígitos; a formatação CNJ é aplicada automaticamente.</p><p id="process-code-error" class="field-error" role="alert" hidden></p></form></section>
-<section id="auth-panel" class="auth-panel" aria-labelledby="access-title"><div class="auth-copy"><p class="eyebrow">ACESSO AO AMBIENTE</p><h2 id="access-title">Credencial e preferências</h2><p>Para este piloto provisionado, use a credencial do ambiente. Ela permanece somente na memória desta página e não é salva no navegador.</p><div style="margin-top:16px"><button id="theme-toggle" class="button-secondary button-compact" type="button" aria-label="Alternar modo escuro" style="display:inline-flex;align-items:center;gap:6px"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg><span id="theme-label-text">Alternar modo escuro</span></button></div></div><div class="token-control"><label for="bearer-token">Bearer token</label><div class="token-row"><input id="bearer-token" type="password" autocomplete="off" aria-describedby="token-hint token-error" placeholder="Cole o token de acesso"><button id="toggle-token" class="button-secondary" type="button" aria-pressed="false" aria-controls="bearer-token" aria-label="Mostrar token de acesso" style="display:inline-flex;align-items:center;gap:6px"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg><span id="token-toggle-text">Mostrar</span></button></div><p id="token-hint" class="field-hint">Enviado somente no cabeçalho de autorização.</p><p id="token-error" class="field-error" role="alert" hidden></p><div style="margin-top:18px"><label style="display:block;margin-bottom:8px;font-size:13px;font-weight:700">Fonte da consulta</label><div style="display:flex;flex-direction:column;gap:8px"><label style="display:inline-flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;padding:8px 14px;border:1px solid var(--line-strong);border-radius:var(--radius-sm);background:var(--panel)"><input type="radio" name="process-source" value="judit" checked style="width:auto;min-height:auto;cursor:pointer"><span>Judit</span></label><label style="display:inline-flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;padding:8px 14px;border:1px solid var(--line-strong);border-radius:var(--radius-sm);background:var(--panel)"><input type="radio" name="process-source" value="datajud" style="width:auto;min-height:auto;cursor:pointer"><span>Datajud</span></label></div></div></div></section>
-<section id="history-panel" class="auth-panel" aria-labelledby="history-title" hidden><div class="auth-copy"><p class="eyebrow">REGISTRO DE NAVEGAÇÃO</p><h2 id="history-title">Histórico de consultas</h2><p>Consultas realizadas recentemente ficam salvas localmente no seu navegador para acesso rápido.</p><div style="margin-top:16px"><button id="clear-history" class="button-secondary button-compact" type="button">Limpar histórico</button></div></div><div class="token-control"><label>Consultas recentes</label><div id="history-list" class="structured-list" style="max-height:260px;overflow-y:auto;display:grid;gap:8px;"><p class="detail-empty">Nenhuma consulta recente registrada.</p></div></div></section>
-<section id="status" class="status-panel" role="status" aria-live="polite" hidden><p id="status-title" class="status-title"></p><p id="status-detail" class="status-detail"></p><div class="status-actions"><button id="request-process" type="button" hidden>Solicitar consulta</button><button id="retry-search" class="button-secondary status-action" type="button" hidden>Tentar novamente</button></div></section><div id="action-feedback" class="visually-hidden" role="status" aria-live="polite"></div>
+<section class="workspace-intro" aria-labelledby="page-title">
+  <p class="eyebrow">CONSULTA PROCESSUAL</p>
+  <h1 id="page-title">Consulte e sintetize um processo.</h1>
+  <p class="lede">Informe o número CNJ e selecione a fonte desejada (Judit ou Datajud/CNJ). Se o processo ainda não estiver disponível no cache, você poderá solicitar a busca diretamente à fonte.</p>
+  <form id="search-form" class="search-form" novalidate>
+    <div class="source-picker-group">
+      <span class="source-picker-label">Fonte processual</span>
+      <div class="source-selector" role="radiogroup" aria-label="Selecione a fonte de consulta">
+        <button type="button" id="source-btn-judit" class="source-btn active" role="radio" aria-checked="true" data-source="judit">
+          <span class="source-radio-indicator" aria-hidden="true"></span>
+          <span class="source-text">
+            <strong>Judit</strong>
+            <span class="source-sub">Autos completos e peças</span>
+          </span>
+        </button>
+        <button type="button" id="source-btn-datajud" class="source-btn" role="radio" aria-checked="false" data-source="datajud">
+          <span class="source-radio-indicator" aria-hidden="true"></span>
+          <span class="source-text">
+            <strong>Datajud</strong>
+            <span class="source-sub">API Pública CNJ</span>
+          </span>
+        </button>
+      </div>
+    </div>
+    <label for="process-code">Número do processo</label>
+    <div class="search-row">
+      <input id="process-code" name="process-code" inputmode="numeric" autocomplete="off" maxlength="25" placeholder="0000000-00.0000.0.00.0000" aria-describedby="process-code-hint process-code-error" required>
+      <button id="search-submit" type="submit">Consultar processo</button>
+    </div>
+    <p id="process-code-hint" class="field-hint">Você pode colar ou digitar os 20 dígitos; a formatação CNJ é aplicada automaticamente.</p>
+    <p id="process-code-error" class="field-error" role="alert" hidden></p>
+  </form>
+</section>
+
+<section id="auth-panel" class="auth-panel" aria-labelledby="access-title" hidden>
+  <div class="auth-copy">
+    <p class="eyebrow">ACESSO E FONTES</p>
+    <h2 id="access-title">Credencial de usuário</h2>
+    <p>Informe o seu token de autorização (Bearer token) para autenticar as consultas na API do Rpy. As credenciais de infraestrutura das fontes (Judit e Datajud) são protegidas e gerenciadas com segurança no servidor.</p>
+    
+    <div class="sources-card">
+      <p class="sources-card-title">Fontes integradas</p>
+      <div class="sources-list">
+        <div class="source-list-item">
+          <span class="source-status-pip" aria-hidden="true"></span>
+          <div class="source-list-item-content">
+            <strong>Judit</strong>
+            <span>Varredura integral de autos, intimações e peças processuais.</span>
+          </div>
+        </div>
+        <div class="source-list-item">
+          <span class="source-status-pip" aria-hidden="true"></span>
+          <div class="source-list-item-content">
+            <strong>Datajud (CNJ)</strong>
+            <span>Base oficial pública nacional do Conselho Nacional de Justiça.</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div style="margin-top:16px">
+      <button id="theme-toggle" class="button-secondary button-compact" type="button" aria-label="Alternar modo escuro" style="display:inline-flex;align-items:center;gap:6px">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
+        <span id="theme-label-text">Alternar modo escuro</span>
+      </button>
+    </div>
+  </div>
+  <div class="token-control">
+    <div style="margin-bottom:14px">
+      <label for="bearer-token">Token de acesso do usuário (Bearer token)</label>
+      <div class="token-row">
+        <input id="bearer-token" type="password" autocomplete="off" placeholder="Cole seu token de autorização (Bearer token)">
+        <button id="toggle-token" class="button-secondary" type="button" aria-pressed="false" aria-controls="bearer-token" style="display:inline-flex;align-items:center;gap:6px">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+          <span id="toggle-token-text">Mostrar</span>
+        </button>
+      </div>
+      <p class="field-hint">Enviado no cabeçalho <code>Authorization: Bearer &lt;token&gt;</code> para controle de acesso ao ambiente.</p>
+    </div>
+    <p id="token-error" class="field-error" role="alert" hidden></p>
+  </div>
+</section>
+
+<section id="history-panel" class="auth-panel" aria-labelledby="history-title" hidden>
+  <div class="auth-copy">
+    <p class="eyebrow">REGISTRO DE NAVEGAÇÃO</p>
+    <h2 id="history-title">Histórico de consultas</h2>
+    <p>Consultas realizadas recentemente ficam salvas localmente no seu navegador para acesso rápido.</p>
+    <div style="margin-top:16px">
+      <button id="clear-history" class="button-secondary button-compact" type="button">Limpar histórico</button>
+    </div>
+  </div>
+  <div class="token-control">
+    <label>Consultas recentes</label>
+    <div id="history-list" class="structured-list" style="max-height:260px;overflow-y:auto;display:grid;gap:8px;">
+      <p class="detail-empty">Nenhuma consulta recente registrada.</p>
+    </div>
+  </div>
+</section>
+
+<section id="status" class="status-panel" role="status" aria-live="polite" hidden>
+  <p id="status-title" class="status-title"></p>
+  <p id="status-detail" class="status-detail"></p>
+  <div class="status-actions">
+    <button id="request-process" type="button" hidden>Solicitar consulta</button>
+    <button id="retry-search" class="button-secondary status-action" type="button" hidden>Tentar novamente</button>
+  </div>
+</section>
+<div id="action-feedback" class="visually-hidden" role="status" aria-live="polite"></div>
+
 <article id="result" class="process-document" aria-labelledby="result-code" aria-busy="false" hidden>
-<header class="process-header"><div class="process-identity"><p class="eyebrow">PROCESSO</p><h2 id="result-code" tabindex="-1"></h2><p id="result-context" class="process-context"></p></div><dl class="metadata"><div><dt>Classe</dt><dd id="result-class">—</dd></div><div><dt>Tribunal</dt><dd id="result-court">—</dd></div><div><dt>Última atualização</dt><dd id="result-updated">—</dd></div></dl></header>
-<nav class="document-nav" aria-label="Seções do processo"><a href="#summary-title">Resumo</a><a href="#case-data-title">Dados processuais</a><a href="#movements-title">Movimentações</a></nav>
-<section class="summary-section" aria-labelledby="summary-title"><div class="summary-toolbar"><div><p id="summary-eyebrow" class="eyebrow">SÍNTESE GERADA POR IA</p><h3 id="summary-title" tabindex="-1">Resumo processual</h3></div><div class="summary-actions"><button id="copy-summary" class="button-secondary button-compact" type="button" hidden style="display:inline-flex;align-items:center;gap:6px"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg><span id="copy-label-text">Copiar resumo</span></button><button id="new-search" class="button-quiet button-compact" type="button">Nova consulta</button></div></div><p id="summary-provenance" class="summary-provenance"></p><div id="summary-body" class="summary-body"></div></section>
-<section class="detail-section" aria-labelledby="case-data-title"><div class="section-heading"><p class="eyebrow">DADOS DA FONTE PROCESSUAL</p><h3 id="case-data-title" tabindex="-1">Contexto do processo</h3></div><div class="detail-grid"><div><h4>Partes</h4><div id="parties-list" class="structured-list"></div></div><div><h4>Assuntos</h4><div id="subjects-list" class="structured-list"></div></div><div><h4>Informações</h4><dl id="header-data" class="fact-list"></dl></div></div></section>
-<section class="detail-section movements-section" aria-labelledby="movements-title"><div class="section-heading"><p class="eyebrow">MOVIMENTAÇÕES DA FONTE</p><h3 id="movements-title" tabindex="-1">Últimos acontecimentos</h3><p>Até 20 movimentações da versão atual, em ordem da mais recente.</p></div><ol id="movements-list" class="timeline"></ol></section>
+  <header class="process-header">
+    <div class="process-identity">
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+        <p class="eyebrow" style="margin:0">PROCESSO</p>
+        <span id="result-source-badge" class="source-badge"><span class="source-badge-dot"></span><span id="result-source-name">Judit</span></span>
+      </div>
+      <h2 id="result-code" tabindex="-1"></h2>
+      <p id="result-context" class="process-context"></p>
+    </div>
+    <dl class="metadata">
+      <div><dt>Classe</dt><dd id="result-class">—</dd></div>
+      <div><dt>Tribunal</dt><dd id="result-court">—</dd></div>
+      <div><dt>Última atualização</dt><dd id="result-updated">—</dd></div>
+    </dl>
+  </header>
+  <nav class="document-nav" aria-label="Seções do processo">
+    <a href="#summary-title">Resumo</a>
+    <a href="#case-data-title">Dados processuais</a>
+    <a href="#movements-title">Movimentações</a>
+  </nav>
+  <section class="summary-section" aria-labelledby="summary-title">
+    <div class="summary-toolbar">
+      <div>
+        <p id="summary-eyebrow" class="eyebrow">SÍNTESE GERADA POR IA</p>
+        <h3 id="summary-title" tabindex="-1">Resumo processual</h3>
+      </div>
+      <div class="summary-actions">
+        <button id="copy-summary" class="button-secondary button-compact" type="button" hidden style="display:inline-flex;align-items:center;gap:6px">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+          <span id="copy-label-text">Copiar resumo</span>
+        </button>
+        <button id="new-search" class="button-quiet button-compact" type="button">Nova consulta</button>
+      </div>
+    </div>
+    <p id="summary-provenance" class="summary-provenance"></p>
+    <div id="summary-body" class="summary-body"></div>
+  </section>
+  <section class="detail-section" aria-labelledby="case-data-title">
+    <div class="section-heading">
+      <p class="eyebrow">DADOS DA FONTE PROCESSUAL</p>
+      <h3 id="case-data-title" tabindex="-1">Contexto do processo</h3>
+    </div>
+    <div class="detail-grid">
+      <div><h4>Partes</h4><div id="parties-list" class="structured-list"></div></div>
+      <div><h4>Assuntos</h4><div id="subjects-list" class="structured-list"></div></div>
+      <div><h4>Informações</h4><dl id="header-data" class="fact-list"></dl></div>
+    </div>
+  </section>
+  <section class="detail-section movements-section" aria-labelledby="movements-title">
+    <div class="section-heading">
+      <p class="eyebrow">MOVIMENTAÇÕES DA FONTE</p>
+      <h3 id="movements-title" tabindex="-1">Últimos acontecimentos</h3>
+      <p>Até 20 movimentações da versão atual, em ordem da mais recente.</p>
+    </div>
+    <ol id="movements-list" class="timeline"></ol>
+  </section>
 </article>
-</main><footer><span>Rag-V</span><span>O resumo auxilia a leitura e não substitui a consulta aos autos.</span></footer><script src="config.js" defer></script><script src="app.js" defer></script>
-</body></html>
+</main>
+<footer>
+  <span>Rpy</span>
+  <span>O resumo auxilia a leitura e não substitui a consulta aos autos.</span>
+</footer>
+<script src="config.js" defer></script>
+<script src="app.js" defer></script>
+</body>
+</html>

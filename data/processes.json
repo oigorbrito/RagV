@@ -145,236 +145,307 @@
       "model": "local-demo-no-provider"
     }
   },
-  "5002482-86.2011.8.21.0033": {
-    "code": "5002482-86.2011.8.21.0033",
+  "00012341820248210001_judit": {
+    "code": "0001234-18.2024.8.21.0001",
+    "source": "judit",
     "class_name": "Procedimento Comum Cível",
-    "court": "TJSP",
-    "updated_at": "2026-10-08T01:59:50.831Z",
+    "court": "TJRS (Judit)",
+    "updated_at": "2026-10-08T04:17:52.849Z",
     "header": {
       "instance": 1,
-      "state": "SP",
-      "county": "São Paulo",
-      "amount": "150000.00",
-      "justice_description": "Estadual",
+      "state": "RS",
+      "county": "Porto Alegre",
+      "amount": "50000.00",
+      "justice_description": "Datalake Processual Judit",
       "area": "Cível"
     },
     "parties": [
       {
-        "name": "Autor Exemplo S.A.",
+        "name": "Parte Autora",
         "side": "active",
         "person_type": "company"
       },
       {
-        "name": "Réu Exemplo Ltda.",
+        "name": "Parte Ré",
         "side": "passive",
         "person_type": "company"
       }
     ],
     "subjects": [
       {
-        "name": "Indenização por Danos Materiais",
-        "code": "10432"
+        "name": "Obrigações / Contratos",
+        "code": "7699"
       }
     ],
     "recent_steps": [
       {
-        "occurred_at": "2026-10-08T01:59:50.831Z",
+        "occurred_at": "2026-10-08T04:17:52.849Z",
         "title": "Juntada de Petição",
-        "text": "Petição de manifestação juntada aos autos (simulação local offline)."
-      },
-      {
-        "occurred_at": "2026-10-03T01:59:50.831Z",
-        "title": "Distribuição",
-        "text": "Distribuição de processo cível."
+        "text": "Movimentação registrada via Judit."
       }
     ],
     "attachments": [
       {
         "id": "att-req-1",
-        "name": "Petição_Inicial_Requisitada.pdf",
-        "size": "1.5 MB",
+        "name": "Petição_Inicial.pdf",
+        "size": "1.2 MB",
         "status": "processed"
       }
     ],
     "summary_status": "ready",
     "summary": {
-      "markdown": "# Resumo do processo\n\nProcesso 5002482-86.2011.8.21.0033 consultado com sucesso (modo local offline).\n\n## Pontos de atenção\n- Autos ativos e regulares.\n- Aguardando manifestação das partes.",
-      "created_at": "2026-10-08T01:59:50.831Z",
-      "model": "local-offline-demo"
+      "markdown": "# Resumo do processo (Judit)\n\nProcesso **0001234-18.2024.8.21.0001** consultado na fonte **Judit**.\n\n- Fonte ativa: **Judit**\n- Dados estruturados carregados com sucesso.",
+      "created_at": "2026-10-08T04:17:52.849Z",
+      "model": "judit-live"
     }
   },
-  "50024828620118210033": {
-    "code": "5002482-86.2011.8.21.0033",
+  "0001234-18.2024.8.21.0001": {
+    "code": "0001234-18.2024.8.21.0001",
+    "source": "judit",
     "class_name": "Procedimento Comum Cível",
-    "court": "TJSP",
-    "updated_at": "2026-10-08T01:59:50.831Z",
+    "court": "TJRS (Judit)",
+    "updated_at": "2026-10-08T04:17:52.849Z",
     "header": {
       "instance": 1,
-      "state": "SP",
-      "county": "São Paulo",
-      "amount": "150000.00",
-      "justice_description": "Estadual",
+      "state": "RS",
+      "county": "Porto Alegre",
+      "amount": "50000.00",
+      "justice_description": "Datalake Processual Judit",
       "area": "Cível"
     },
     "parties": [
       {
-        "name": "Autor Exemplo S.A.",
+        "name": "Parte Autora",
         "side": "active",
         "person_type": "company"
       },
       {
-        "name": "Réu Exemplo Ltda.",
+        "name": "Parte Ré",
         "side": "passive",
         "person_type": "company"
       }
     ],
     "subjects": [
       {
-        "name": "Indenização por Danos Materiais",
-        "code": "10432"
+        "name": "Obrigações / Contratos",
+        "code": "7699"
       }
     ],
     "recent_steps": [
       {
-        "occurred_at": "2026-10-08T01:59:50.831Z",
+        "occurred_at": "2026-10-08T04:17:52.849Z",
         "title": "Juntada de Petição",
-        "text": "Petição de manifestação juntada aos autos (simulação local offline)."
-      },
-      {
-        "occurred_at": "2026-10-03T01:59:50.831Z",
-        "title": "Distribuição",
-        "text": "Distribuição de processo cível."
+        "text": "Movimentação registrada via Judit."
       }
     ],
     "attachments": [
       {
         "id": "att-req-1",
-        "name": "Petição_Inicial_Requisitada.pdf",
-        "size": "1.5 MB",
+        "name": "Petição_Inicial.pdf",
+        "size": "1.2 MB",
         "status": "processed"
       }
     ],
     "summary_status": "ready",
     "summary": {
-      "markdown": "# Resumo do processo\n\nProcesso 5002482-86.2011.8.21.0033 consultado com sucesso (modo local offline).\n\n## Pontos de atenção\n- Autos ativos e regulares.\n- Aguardando manifestação das partes.",
-      "created_at": "2026-10-08T01:59:50.831Z",
-      "model": "local-offline-demo"
+      "markdown": "# Resumo do processo (Judit)\n\nProcesso **0001234-18.2024.8.21.0001** consultado na fonte **Judit**.\n\n- Fonte ativa: **Judit**\n- Dados estruturados carregados com sucesso.",
+      "created_at": "2026-10-08T04:17:52.849Z",
+      "model": "judit-live"
     }
   },
-  "5000395-40.2023.8.21.0033": {
-    "code": "5000395-40.2023.8.21.0033",
+  "00012341820248210001": {
+    "code": "0001234-18.2024.8.21.0001",
+    "source": "judit",
     "class_name": "Procedimento Comum Cível",
-    "court": "TJSP",
-    "updated_at": "2026-10-08T02:28:04.657Z",
+    "court": "TJRS (Judit)",
+    "updated_at": "2026-10-08T04:17:52.849Z",
     "header": {
       "instance": 1,
-      "state": "SP",
-      "county": "São Paulo",
-      "amount": "150000.00",
-      "justice_description": "Estadual",
+      "state": "RS",
+      "county": "Porto Alegre",
+      "amount": "50000.00",
+      "justice_description": "Datalake Processual Judit",
       "area": "Cível"
     },
     "parties": [
       {
-        "name": "Autor Exemplo S.A.",
+        "name": "Parte Autora",
         "side": "active",
         "person_type": "company"
       },
       {
-        "name": "Réu Exemplo Ltda.",
+        "name": "Parte Ré",
         "side": "passive",
         "person_type": "company"
       }
     ],
     "subjects": [
       {
-        "name": "Indenização por Danos Materiais",
-        "code": "10432"
+        "name": "Obrigações / Contratos",
+        "code": "7699"
       }
     ],
     "recent_steps": [
       {
-        "occurred_at": "2026-10-08T02:28:04.657Z",
+        "occurred_at": "2026-10-08T04:17:52.849Z",
         "title": "Juntada de Petição",
-        "text": "Petição de manifestação juntada aos autos (simulação local offline)."
-      },
-      {
-        "occurred_at": "2026-10-03T02:28:04.657Z",
-        "title": "Distribuição",
-        "text": "Distribuição de processo cível."
+        "text": "Movimentação registrada via Judit."
       }
     ],
     "attachments": [
       {
         "id": "att-req-1",
-        "name": "Petição_Inicial_Requisitada.pdf",
-        "size": "1.5 MB",
+        "name": "Petição_Inicial.pdf",
+        "size": "1.2 MB",
         "status": "processed"
       }
     ],
     "summary_status": "ready",
     "summary": {
-      "markdown": "# Resumo do processo\n\nProcesso 5000395-40.2023.8.21.0033 consultado com sucesso (modo local offline).\n\n## Pontos de atenção\n- Autos ativos e regulares.\n- Aguardando manifestação das partes.",
-      "created_at": "2026-10-08T02:28:04.657Z",
-      "model": "local-offline-demo"
+      "markdown": "# Resumo do processo (Judit)\n\nProcesso **0001234-18.2024.8.21.0001** consultado na fonte **Judit**.\n\n- Fonte ativa: **Judit**\n- Dados estruturados carregados com sucesso.",
+      "created_at": "2026-10-08T04:17:52.849Z",
+      "model": "judit-live"
     }
   },
-  "50003954020238210033": {
-    "code": "5000395-40.2023.8.21.0033",
+  "00056785020248260100_datajud": {
+    "code": "0005678-50.2024.8.26.0100",
+    "source": "datajud",
     "class_name": "Procedimento Comum Cível",
-    "court": "TJSP",
-    "updated_at": "2026-10-08T02:28:04.657Z",
+    "court": "TJSP (Datajud)",
+    "updated_at": "2026-10-08T04:17:52.866Z",
     "header": {
       "instance": 1,
       "state": "SP",
       "county": "São Paulo",
-      "amount": "150000.00",
-      "justice_description": "Estadual",
+      "amount": "50000.00",
+      "justice_description": "Pública / CNJ Datajud",
       "area": "Cível"
     },
     "parties": [
       {
-        "name": "Autor Exemplo S.A.",
+        "name": "Parte Autora",
         "side": "active",
         "person_type": "company"
       },
       {
-        "name": "Réu Exemplo Ltda.",
+        "name": "Parte Ré",
         "side": "passive",
         "person_type": "company"
       }
     ],
     "subjects": [
       {
-        "name": "Indenização por Danos Materiais",
-        "code": "10432"
+        "name": "Obrigações / Contratos",
+        "code": "7699"
       }
     ],
     "recent_steps": [
       {
-        "occurred_at": "2026-10-08T02:28:04.657Z",
+        "occurred_at": "2026-10-08T04:17:52.866Z",
         "title": "Juntada de Petição",
-        "text": "Petição de manifestação juntada aos autos (simulação local offline)."
-      },
-      {
-        "occurred_at": "2026-10-03T02:28:04.657Z",
-        "title": "Distribuição",
-        "text": "Distribuição de processo cível."
+        "text": "Movimentação registrada via Datajud (CNJ)."
       }
     ],
-    "attachments": [
-      {
-        "id": "att-req-1",
-        "name": "Petição_Inicial_Requisitada.pdf",
-        "size": "1.5 MB",
-        "status": "processed"
-      }
-    ],
+    "attachments": [],
     "summary_status": "ready",
     "summary": {
-      "markdown": "# Resumo do processo\n\nProcesso 5000395-40.2023.8.21.0033 consultado com sucesso (modo local offline).\n\n## Pontos de atenção\n- Autos ativos e regulares.\n- Aguardando manifestação das partes.",
-      "created_at": "2026-10-08T02:28:04.657Z",
-      "model": "local-offline-demo"
+      "markdown": "# Resumo do processo (Datajud / CNJ)\n\nProcesso **0005678-50.2024.8.26.0100** consultado na fonte **Datajud (CNJ)**.\n\n- Fonte ativa: **Datajud (CNJ)**\n- Dados estruturados carregados com sucesso.",
+      "created_at": "2026-10-08T04:17:52.866Z",
+      "model": "datajud-cnj"
+    }
+  },
+  "0005678-50.2024.8.26.0100": {
+    "code": "0005678-50.2024.8.26.0100",
+    "source": "datajud",
+    "class_name": "Procedimento Comum Cível",
+    "court": "TJSP (Datajud)",
+    "updated_at": "2026-10-08T04:17:52.866Z",
+    "header": {
+      "instance": 1,
+      "state": "SP",
+      "county": "São Paulo",
+      "amount": "50000.00",
+      "justice_description": "Pública / CNJ Datajud",
+      "area": "Cível"
+    },
+    "parties": [
+      {
+        "name": "Parte Autora",
+        "side": "active",
+        "person_type": "company"
+      },
+      {
+        "name": "Parte Ré",
+        "side": "passive",
+        "person_type": "company"
+      }
+    ],
+    "subjects": [
+      {
+        "name": "Obrigações / Contratos",
+        "code": "7699"
+      }
+    ],
+    "recent_steps": [
+      {
+        "occurred_at": "2026-10-08T04:17:52.866Z",
+        "title": "Juntada de Petição",
+        "text": "Movimentação registrada via Datajud (CNJ)."
+      }
+    ],
+    "attachments": [],
+    "summary_status": "ready",
+    "summary": {
+      "markdown": "# Resumo do processo (Datajud / CNJ)\n\nProcesso **0005678-50.2024.8.26.0100** consultado na fonte **Datajud (CNJ)**.\n\n- Fonte ativa: **Datajud (CNJ)**\n- Dados estruturados carregados com sucesso.",
+      "created_at": "2026-10-08T04:17:52.866Z",
+      "model": "datajud-cnj"
+    }
+  },
+  "00056785020248260100": {
+    "code": "0005678-50.2024.8.26.0100",
+    "source": "datajud",
+    "class_name": "Procedimento Comum Cível",
+    "court": "TJSP (Datajud)",
+    "updated_at": "2026-10-08T04:17:52.866Z",
+    "header": {
+      "instance": 1,
+      "state": "SP",
+      "county": "São Paulo",
+      "amount": "50000.00",
+      "justice_description": "Pública / CNJ Datajud",
+      "area": "Cível"
+    },
+    "parties": [
+      {
+        "name": "Parte Autora",
+        "side": "active",
+        "person_type": "company"
+      },
+      {
+        "name": "Parte Ré",
+        "side": "passive",
+        "person_type": "company"
+      }
+    ],
+    "subjects": [
+      {
+        "name": "Obrigações / Contratos",
+        "code": "7699"
+      }
+    ],
+    "recent_steps": [
+      {
+        "occurred_at": "2026-10-08T04:17:52.866Z",
+        "title": "Juntada de Petição",
+        "text": "Movimentação registrada via Datajud (CNJ)."
+      }
+    ],
+    "attachments": [],
+    "summary_status": "ready",
+    "summary": {
+      "markdown": "# Resumo do processo (Datajud / CNJ)\n\nProcesso **0005678-50.2024.8.26.0100** consultado na fonte **Datajud (CNJ)**.\n\n- Fonte ativa: **Datajud (CNJ)**\n- Dados estruturados carregados com sucesso.",
+      "created_at": "2026-10-08T04:17:52.866Z",
+      "model": "datajud-cnj"
     }
   }
 }
