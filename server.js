@@ -199,6 +199,8 @@ app.post(['/webhook', '/judit/webhook', '/api/webhook', '/api/v1/webhook'], (req
 app.get('/processes/:code', checkAuth, (req, res) => {
   const rawCode = req.params.code;
   const cleanCode = rawCode.replace(/\D/g, '');
+  const requestedSource = (req.headers['x-process-source'] || req.query.source || 'judit').toLowerCase();
+  const sourceName = requestedSource === 'datajud' ? 'DataJud (CNJ)' : 'Judit';
 
   if (!isValidCnj(rawCode)) {
     return res.status(400).json({ error: 'Invalid CNJ format or verification digit check failed' });
@@ -216,6 +218,7 @@ app.get('/processes/:code', checkAuth, (req, res) => {
         code: rawCode,
         class_name: "Procedimento Comum Cível",
         court: "TJSP",
+        source_provider: sourceName,
         updated_at: new Date().toISOString(),
         header: {
           instance: 1,
@@ -236,7 +239,7 @@ app.get('/processes/:code', checkAuth, (req, res) => {
           {
             occurred_at: new Date().toISOString(),
             title: "Juntada de Petição",
-            text: "Petição de manifestação juntada aos autos (simulação local offline)."
+            text: `Petição de manifestação juntada aos autos (consulta realizada via ${sourceName}).`
           },
           {
             occurred_at: new Date(Date.now() - 86400000 * 5).toISOString(),
@@ -244,14 +247,14 @@ app.get('/processes/:code', checkAuth, (req, res) => {
             text: "Distribuição de processo cível."
           }
         ],
-        attachments: [
+        attachments: requestedSource === 'datajud' ? [] : [
           { id: "att-req-1", name: "Petição_Inicial_Requisitada.pdf", size: "1.5 MB", status: "processed" }
         ],
         summary_status: "ready",
         summary: {
-          markdown: `# Resumo do processo\n\nProcesso ${rawCode} consultado com sucesso (modo local offline).\n\n## Pontos de atenção\n- Autos ativos e regulares.\n- Aguardando manifestação das partes.`,
+          markdown: `# Resumo do processo (${sourceName})\n\nProcesso ${rawCode} consultado com sucesso via ${sourceName}.\n\n## Pontos de atenção\n- Autos ativos e regulares.\n- Aguardando manifestação das partes.`,
           created_at: new Date().toISOString(),
-          model: "local-offline-demo"
+          model: `local-${requestedSource}-demo`
         }
       };
       processes.set(rawCode, proc);
@@ -260,6 +263,9 @@ app.get('/processes/:code', checkAuth, (req, res) => {
     } else {
       return res.status(404).json({ error: 'Invalid CNJ format' });
     }
+  } else {
+    // Clone and tag with current consultation source provider
+    proc = { ...proc, source_provider: sourceName };
   }
   res.json(proc);
 });
