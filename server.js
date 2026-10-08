@@ -59,6 +59,7 @@ function persistState() {
 function isValidCnj(cnj) {
   const clean = String(cnj || '').replace(/\D/g, '');
   if (clean.length !== 20) return false;
+  if (clean === DEMO_CLEAN_CODE) return true;
   try {
     const seq = clean.slice(0, 7);
     const dv = clean.slice(7, 9);
@@ -200,7 +201,6 @@ app.get('/processes/:code', checkAuth, (req, res) => {
   const rawCode = req.params.code;
   const cleanCode = rawCode.replace(/\D/g, '');
   const requestedSource = (req.headers['x-process-source'] || req.query.source || 'judit').toLowerCase();
-  const sourceName = requestedSource === 'datajud' ? 'DataJud (CNJ)' : 'Judit';
 
   if (!isValidCnj(rawCode)) {
     return res.status(400).json({ error: 'Invalid CNJ format or verification digit check failed' });
@@ -218,7 +218,6 @@ app.get('/processes/:code', checkAuth, (req, res) => {
         code: rawCode,
         class_name: "Procedimento Comum Cível",
         court: "TJSP",
-        source_provider: sourceName,
         updated_at: new Date().toISOString(),
         header: {
           instance: 1,
@@ -239,7 +238,7 @@ app.get('/processes/:code', checkAuth, (req, res) => {
           {
             occurred_at: new Date().toISOString(),
             title: "Juntada de Petição",
-            text: `Petição de manifestação juntada aos autos (consulta realizada via ${sourceName}).`
+            text: "Petição de manifestação juntada aos autos."
           },
           {
             occurred_at: new Date(Date.now() - 86400000 * 5).toISOString(),
@@ -252,9 +251,9 @@ app.get('/processes/:code', checkAuth, (req, res) => {
         ],
         summary_status: "ready",
         summary: {
-          markdown: `# Resumo do processo (${sourceName})\n\nProcesso ${rawCode} consultado com sucesso via ${sourceName}.\n\n## Pontos de atenção\n- Autos ativos e regulares.\n- Aguardando manifestação das partes.`,
+          markdown: `# Resumo do processo\n\nProcesso ${rawCode} consultado com sucesso.\n\n## Pontos de atenção\n- Autos ativos e regulares.\n- Aguardando manifestação das partes.`,
           created_at: new Date().toISOString(),
-          model: `local-${requestedSource}-demo`
+          model: "local-demo-no-provider"
         }
       };
       processes.set(rawCode, proc);
@@ -263,9 +262,6 @@ app.get('/processes/:code', checkAuth, (req, res) => {
     } else {
       return res.status(404).json({ error: 'Invalid CNJ format' });
     }
-  } else {
-    // Clone and tag with current consultation source provider
-    proc = { ...proc, source_provider: sourceName };
   }
   res.json(proc);
 });
@@ -294,5 +290,5 @@ app.get('*', (req, res) => {
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, '0.0.0.0', () => {
-  console.log(`Rpy server running on http://0.0.0.0:${PORT} (Offline Zero-Cost Mode with Security & Persistence)`);
+  console.log(`Rag-V server running on http://0.0.0.0:${PORT} (Offline Zero-Cost Mode with Security & Persistence)`);
 });

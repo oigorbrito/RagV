@@ -1,0 +1,380 @@
+{
+  "0000000-00.2026.8.21.0001": {
+    "code": "0000000-00.2026.8.21.0001",
+    "class_name": "Ação Cível",
+    "court": "TJRS",
+    "updated_at": "2026-10-08T01:56:03.567Z",
+    "header": {
+      "instance": 1,
+      "state": "RS",
+      "county": "Porto Alegre",
+      "amount": "50000.00",
+      "justice_description": "Estadual",
+      "area": "Cível"
+    },
+    "parties": [
+      {
+        "name": "Empresa Alfa Ltda.",
+        "side": "active",
+        "person_type": "company"
+      },
+      {
+        "name": "Empresa Beta Ltda.",
+        "side": "passive",
+        "person_type": "company"
+      }
+    ],
+    "subjects": [
+      {
+        "name": "Contrato",
+        "code": "9583"
+      },
+      {
+        "name": "Obrigações",
+        "code": "7699"
+      }
+    ],
+    "recent_steps": [
+      {
+        "occurred_at": "2026-03-18T12:00:00Z",
+        "title": "Contestação",
+        "text": "Contestação sintética apresentada para teste do fluxo do produto."
+      },
+      {
+        "occurred_at": "2026-02-05T12:00:00Z",
+        "title": "Citação",
+        "text": "Citação sintética registrada no ambiente de demonstração."
+      },
+      {
+        "occurred_at": "2026-01-10T12:00:00Z",
+        "title": "Distribuição",
+        "text": "Processo sintético distribuído para fins de demonstração local."
+      }
+    ],
+    "attachments": [
+      {
+        "id": "att-1",
+        "name": "Petição Inicial.pdf",
+        "size": "1.2 MB",
+        "status": "processed"
+      },
+      {
+        "id": "att-2",
+        "name": "Contestação.pdf",
+        "size": "850 KB",
+        "status": "processed"
+      }
+    ],
+    "summary_status": "ready",
+    "summary": {
+      "markdown": "# Resumo do processo\n\nProcesso 0000000-00.2026.8.21.0001. Situação processual registrada.\n\n## Pontos de atenção\n- Nenhuma divergência objetiva identificada.\n- Prazo regular em curso.",
+      "created_at": "2026-10-08T01:56:03.567Z",
+      "model": "local-demo-no-provider"
+    }
+  },
+  "00000000020268210001": {
+    "code": "0000000-00.2026.8.21.0001",
+    "class_name": "Ação Cível",
+    "court": "TJRS",
+    "updated_at": "2026-10-08T01:56:03.567Z",
+    "header": {
+      "instance": 1,
+      "state": "RS",
+      "county": "Porto Alegre",
+      "amount": "50000.00",
+      "justice_description": "Estadual",
+      "area": "Cível"
+    },
+    "parties": [
+      {
+        "name": "Empresa Alfa Ltda.",
+        "side": "active",
+        "person_type": "company"
+      },
+      {
+        "name": "Empresa Beta Ltda.",
+        "side": "passive",
+        "person_type": "company"
+      }
+    ],
+    "subjects": [
+      {
+        "name": "Contrato",
+        "code": "9583"
+      },
+      {
+        "name": "Obrigações",
+        "code": "7699"
+      }
+    ],
+    "recent_steps": [
+      {
+        "occurred_at": "2026-03-18T12:00:00Z",
+        "title": "Contestação",
+        "text": "Contestação sintética apresentada para teste do fluxo do produto."
+      },
+      {
+        "occurred_at": "2026-02-05T12:00:00Z",
+        "title": "Citação",
+        "text": "Citação sintética registrada no ambiente de demonstração."
+      },
+      {
+        "occurred_at": "2026-01-10T12:00:00Z",
+        "title": "Distribuição",
+        "text": "Processo sintético distribuído para fins de demonstração local."
+      }
+    ],
+    "attachments": [
+      {
+        "id": "att-1",
+        "name": "Petição Inicial.pdf",
+        "size": "1.2 MB",
+        "status": "processed"
+      },
+      {
+        "id": "att-2",
+        "name": "Contestação.pdf",
+        "size": "850 KB",
+        "status": "processed"
+      }
+    ],
+    "summary_status": "ready",
+    "summary": {
+      "markdown": "# Resumo do processo\n\nProcesso 0000000-00.2026.8.21.0001. Situação processual registrada.\n\n## Pontos de atenção\n- Nenhuma divergência objetiva identificada.\n- Prazo regular em curso.",
+      "created_at": "2026-10-08T01:56:03.567Z",
+      "model": "local-demo-no-provider"
+    }
+  },
+  "5002482-86.2011.8.21.0033": {
+    "code": "5002482-86.2011.8.21.0033",
+    "class_name": "Procedimento Comum Cível",
+    "court": "TJSP",
+    "updated_at": "2026-10-08T01:59:50.831Z",
+    "header": {
+      "instance": 1,
+      "state": "SP",
+      "county": "São Paulo",
+      "amount": "150000.00",
+      "justice_description": "Estadual",
+      "area": "Cível"
+    },
+    "parties": [
+      {
+        "name": "Autor Exemplo S.A.",
+        "side": "active",
+        "person_type": "company"
+      },
+      {
+        "name": "Réu Exemplo Ltda.",
+        "side": "passive",
+        "person_type": "company"
+      }
+    ],
+    "subjects": [
+      {
+        "name": "Indenização por Danos Materiais",
+        "code": "10432"
+      }
+    ],
+    "recent_steps": [
+      {
+        "occurred_at": "2026-10-08T01:59:50.831Z",
+        "title": "Juntada de Petição",
+        "text": "Petição de manifestação juntada aos autos (simulação local offline)."
+      },
+      {
+        "occurred_at": "2026-10-03T01:59:50.831Z",
+        "title": "Distribuição",
+        "text": "Distribuição de processo cível."
+      }
+    ],
+    "attachments": [
+      {
+        "id": "att-req-1",
+        "name": "Petição_Inicial_Requisitada.pdf",
+        "size": "1.5 MB",
+        "status": "processed"
+      }
+    ],
+    "summary_status": "ready",
+    "summary": {
+      "markdown": "# Resumo do processo\n\nProcesso 5002482-86.2011.8.21.0033 consultado com sucesso (modo local offline).\n\n## Pontos de atenção\n- Autos ativos e regulares.\n- Aguardando manifestação das partes.",
+      "created_at": "2026-10-08T01:59:50.831Z",
+      "model": "local-offline-demo"
+    }
+  },
+  "50024828620118210033": {
+    "code": "5002482-86.2011.8.21.0033",
+    "class_name": "Procedimento Comum Cível",
+    "court": "TJSP",
+    "updated_at": "2026-10-08T01:59:50.831Z",
+    "header": {
+      "instance": 1,
+      "state": "SP",
+      "county": "São Paulo",
+      "amount": "150000.00",
+      "justice_description": "Estadual",
+      "area": "Cível"
+    },
+    "parties": [
+      {
+        "name": "Autor Exemplo S.A.",
+        "side": "active",
+        "person_type": "company"
+      },
+      {
+        "name": "Réu Exemplo Ltda.",
+        "side": "passive",
+        "person_type": "company"
+      }
+    ],
+    "subjects": [
+      {
+        "name": "Indenização por Danos Materiais",
+        "code": "10432"
+      }
+    ],
+    "recent_steps": [
+      {
+        "occurred_at": "2026-10-08T01:59:50.831Z",
+        "title": "Juntada de Petição",
+        "text": "Petição de manifestação juntada aos autos (simulação local offline)."
+      },
+      {
+        "occurred_at": "2026-10-03T01:59:50.831Z",
+        "title": "Distribuição",
+        "text": "Distribuição de processo cível."
+      }
+    ],
+    "attachments": [
+      {
+        "id": "att-req-1",
+        "name": "Petição_Inicial_Requisitada.pdf",
+        "size": "1.5 MB",
+        "status": "processed"
+      }
+    ],
+    "summary_status": "ready",
+    "summary": {
+      "markdown": "# Resumo do processo\n\nProcesso 5002482-86.2011.8.21.0033 consultado com sucesso (modo local offline).\n\n## Pontos de atenção\n- Autos ativos e regulares.\n- Aguardando manifestação das partes.",
+      "created_at": "2026-10-08T01:59:50.831Z",
+      "model": "local-offline-demo"
+    }
+  },
+  "5000395-40.2023.8.21.0033": {
+    "code": "5000395-40.2023.8.21.0033",
+    "class_name": "Procedimento Comum Cível",
+    "court": "TJSP",
+    "updated_at": "2026-10-08T02:28:04.657Z",
+    "header": {
+      "instance": 1,
+      "state": "SP",
+      "county": "São Paulo",
+      "amount": "150000.00",
+      "justice_description": "Estadual",
+      "area": "Cível"
+    },
+    "parties": [
+      {
+        "name": "Autor Exemplo S.A.",
+        "side": "active",
+        "person_type": "company"
+      },
+      {
+        "name": "Réu Exemplo Ltda.",
+        "side": "passive",
+        "person_type": "company"
+      }
+    ],
+    "subjects": [
+      {
+        "name": "Indenização por Danos Materiais",
+        "code": "10432"
+      }
+    ],
+    "recent_steps": [
+      {
+        "occurred_at": "2026-10-08T02:28:04.657Z",
+        "title": "Juntada de Petição",
+        "text": "Petição de manifestação juntada aos autos (simulação local offline)."
+      },
+      {
+        "occurred_at": "2026-10-03T02:28:04.657Z",
+        "title": "Distribuição",
+        "text": "Distribuição de processo cível."
+      }
+    ],
+    "attachments": [
+      {
+        "id": "att-req-1",
+        "name": "Petição_Inicial_Requisitada.pdf",
+        "size": "1.5 MB",
+        "status": "processed"
+      }
+    ],
+    "summary_status": "ready",
+    "summary": {
+      "markdown": "# Resumo do processo\n\nProcesso 5000395-40.2023.8.21.0033 consultado com sucesso (modo local offline).\n\n## Pontos de atenção\n- Autos ativos e regulares.\n- Aguardando manifestação das partes.",
+      "created_at": "2026-10-08T02:28:04.657Z",
+      "model": "local-offline-demo"
+    }
+  },
+  "50003954020238210033": {
+    "code": "5000395-40.2023.8.21.0033",
+    "class_name": "Procedimento Comum Cível",
+    "court": "TJSP",
+    "updated_at": "2026-10-08T02:28:04.657Z",
+    "header": {
+      "instance": 1,
+      "state": "SP",
+      "county": "São Paulo",
+      "amount": "150000.00",
+      "justice_description": "Estadual",
+      "area": "Cível"
+    },
+    "parties": [
+      {
+        "name": "Autor Exemplo S.A.",
+        "side": "active",
+        "person_type": "company"
+      },
+      {
+        "name": "Réu Exemplo Ltda.",
+        "side": "passive",
+        "person_type": "company"
+      }
+    ],
+    "subjects": [
+      {
+        "name": "Indenização por Danos Materiais",
+        "code": "10432"
+      }
+    ],
+    "recent_steps": [
+      {
+        "occurred_at": "2026-10-08T02:28:04.657Z",
+        "title": "Juntada de Petição",
+        "text": "Petição de manifestação juntada aos autos (simulação local offline)."
+      },
+      {
+        "occurred_at": "2026-10-03T02:28:04.657Z",
+        "title": "Distribuição",
+        "text": "Distribuição de processo cível."
+      }
+    ],
+    "attachments": [
+      {
+        "id": "att-req-1",
+        "name": "Petição_Inicial_Requisitada.pdf",
+        "size": "1.5 MB",
+        "status": "processed"
+      }
+    ],
+    "summary_status": "ready",
+    "summary": {
+      "markdown": "# Resumo do processo\n\nProcesso 5000395-40.2023.8.21.0033 consultado com sucesso (modo local offline).\n\n## Pontos de atenção\n- Autos ativos e regulares.\n- Aguardando manifestação das partes.",
+      "created_at": "2026-10-08T02:28:04.657Z",
+      "model": "local-offline-demo"
+    }
+  }
+}
