@@ -52,6 +52,13 @@ def _summary_format(value: Any) -> str:
     return rendered
 
 
+def _summary_source(value: Any) -> str:
+    rendered = str(value or "judit").strip().lower()
+    if rendered != "judit":
+        raise HTTPException(status_code=400, detail="source must be 'judit'")
+    return rendered
+
+
 def _summary_representation(
     *,
     markdown: str | None,
@@ -488,12 +495,13 @@ async def create_summary_job(request: Request):
     except ValueError:
         raise HTTPException(status_code=400, detail="invalid process code") from None
     response_format = _summary_format(body.get("format"))
-
+    source = _summary_source(body.get("source"))
 
     principal = await principal_from_request(request, process_code=code)
     normalized_body = dict(body)
     normalized_body["cnj"] = code
     normalized_body["format"] = response_format
+    normalized_body["source"] = source
     try:
         fingerprint = request_fingerprint(normalized_body)
     except ValueError:
