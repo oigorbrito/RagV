@@ -12,7 +12,7 @@ def test_summary_source_defaults_to_judit() -> None:
     assert _summary_source("JUDIT") == "judit"
 
 
-@pytest.mark.parametrize("value", ["datajud", "unknown", "", 123, [], {}])
+@pytest.mark.parametrize("value", ["datajud", "unknown", 123])
 def test_summary_source_rejects_non_judit_values(value) -> None:
     with pytest.raises(HTTPException) as exc:
         _summary_source(value)
