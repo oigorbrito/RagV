@@ -82,6 +82,18 @@ def test_sanitize_error_message_redacts_anthropic_api_key_token() -> None:
     assert REDACTED in rendered
 
 
+def test_sanitize_error_message_redacts_jwt_tokens() -> None:
+    jwt_token = (
+        "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9."
+        "eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiaWF0IjoxNTE2MjM5MDIyfQ."
+        "SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c"
+    )
+    rendered = sanitize_error_message(f"invalid session token {jwt_token} in request")
+
+    assert jwt_token not in rendered
+    assert f"invalid session token {REDACTED} in request" == rendered
+
+
 def test_sanitize_error_message_redacts_json_bearer_token_key(monkeypatch) -> None:
     monkeypatch.setenv(
         "RPY_BEARER_TOKENS",
