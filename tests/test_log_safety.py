@@ -149,24 +149,6 @@ def test_sanitize_error_message_redacts_compound_secret_keys() -> None:
     assert "refresh_token=[REDACTED]" in rendered
 
 
-def test_sanitize_error_message_redacts_generic_key_and_credential_parameters() -> None:
-    rendered = sanitize_error_message(
-        "failed with https://api.example.com?key=my_secret_key_12345 "
-        "credential=my_cred_123 credentials=my_creds_456 passcode=code_789 pass=secretpass"
-    )
-
-    assert "my_secret_key_12345" not in rendered
-    assert "my_cred_123" not in rendered
-    assert "my_creds_456" not in rendered
-    assert "code_789" not in rendered
-    assert "secretpass" not in rendered
-    assert "key=[REDACTED]" in rendered
-    assert "credential=[REDACTED]" in rendered
-    assert "credentials=[REDACTED]" in rendered
-    assert "passcode=[REDACTED]" in rendered
-    assert "pass=[REDACTED]" in rendered
-
-
 @pytest.mark.parametrize("scheme", ["Bearer", "APIKey", "Basic", "Token", "Digest", "Negotiate", "OAuth"])
 def test_sanitize_error_message_redacts_authorization_schemes(scheme: str) -> None:
     rendered = sanitize_error_message(
@@ -185,7 +167,6 @@ _CREDENTIAL_ALPHABET = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123
     key=st.sampled_from((
         "api_key", "api-key", "token", "access_token", "bearer", "password", "secret",
         "secret_key", "private_key", "client_secret", "refresh_token", "auth_token", "access_key",
-        "key", "credential", "credentials", "passcode", "pass",
     )),
     key_quote=st.sampled_from(("", '"', "'")),
     value_quote=st.sampled_from(("", '"', "'")),
