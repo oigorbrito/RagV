@@ -4,7 +4,7 @@ import pytest
 from fastapi import HTTPException
 
 from app.api_v1 import _summary_source
-from app.idempotency import request_fingerprint
+from app.public_lifecycle import request_fingerprint
 
 
 def test_summary_source_defaults_to_judit() -> None:
