@@ -33,35 +33,86 @@ const form = document.querySelector('#search-form'),
   summaryEyebrow = document.querySelector('#summary-eyebrow'),
   newSearchButton = document.querySelector('#new-search'),
   actionFeedback = document.querySelector('#action-feedback'),
-  sourceBtns = document.querySelectorAll('.source-btn'),
+  sourceRadios = document.querySelectorAll('input[name="process-source"]'),
+  sourceOptionCards = document.querySelectorAll('.source-option-card'),
   sourceBadge = document.querySelector('#result-source-badge'),
-  sourceName = document.querySelector('#result-source-name');
+  sourceName = document.querySelector('#result-source-name'),
+  currentSourceLabel = document.querySelector('#current-source-name'),
+  introSourceName = document.querySelector('#intro-source-name'),
+  openAuthFromSearch = document.querySelector('#open-auth-from-search');
 
 let currentSummary = '',
   pollTimer = null,
   pollAttempts = 0,
   pendingRequest = null,
   copyTimer = null,
-  activeSource = sessionStorage.getItem('rpy_source') || 'judit';
+  activeSource = (function() {
+    try {
+      return localStorage.getItem('rpy_preferred_source') || sessionStorage.getItem('rpy_source') || 'judit';
+    } catch {
+      return 'judit';
+    }
+  })();
 
 function setActiveSource(src) {
   activeSource = src === 'datajud' ? 'datajud' : 'judit';
   sessionStorage.setItem('rpy_source', activeSource);
-  sourceBtns.forEach(btn => {
-    const isCurrent = btn.dataset.source === activeSource;
-    btn.classList.toggle('active', isCurrent);
-    btn.setAttribute('aria-checked', isCurrent ? 'true' : 'false');
+  try {
+    localStorage.setItem('rpy_preferred_source', activeSource);
+  } catch {}
+
+  sourceRadios.forEach(radio => {
+    radio.checked = radio.value === activeSource;
   });
+
+  sourceOptionCards.forEach(card => {
+    const radio = card.querySelector('input[type="radio"]');
+    const isChecked = radio && radio.value === activeSource;
+    card.classList.toggle('active', isChecked);
+  });
+
+  if (currentSourceLabel) {
+    currentSourceLabel.textContent = activeSource === 'datajud' ? 'Datajud (CNJ)' : 'Judit (Padrão)';
+  }
+  if (introSourceName) {
+    introSourceName.textContent = activeSource === 'datajud' ? 'Datajud' : 'Judit';
+  }
   if (requestButton && !requestButton.hidden) {
     requestButton.textContent = activeSource === 'datajud' ? 'Consultar no Datajud (CNJ)' : 'Solicitar busca na Judit';
   }
+  updateAccessState();
 }
 
-sourceBtns.forEach(btn => {
-  btn.addEventListener('click', () => {
-    setActiveSource(btn.dataset.source);
+sourceRadios.forEach(radio => {
+  radio.addEventListener('change', () => {
+    if (radio.checked) {
+      setActiveSource(radio.value);
+    }
   });
 });
+
+sourceOptionCards.forEach(card => {
+  card.addEventListener('click', () => {
+    const radio = card.querySelector('input[type="radio"]');
+    if (radio) {
+      radio.checked = true;
+      setActiveSource(radio.value);
+    }
+  });
+});
+
+if (openAuthFromSearch) {
+  openAuthFromSearch.addEventListener('click', () => {
+    authPanel.hidden = false;
+    accessTrigger.setAttribute('aria-expanded', 'true');
+    historyPanel.hidden = true;
+    historyTrigger.setAttribute('aria-expanded', 'false');
+    const targetCard = document.querySelector('#source-option-judit') || document.querySelector('#source-selection-label');
+    if (targetCard) {
+      targetCard.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+  });
+}
 
 const MAX_POLL_ATTEMPTS = 20,
   POLL_INTERVAL_MS = 3000,
@@ -120,15 +171,15 @@ function getBearerToken() {
 function updateAccessState() {
   const isOk = Boolean(getBearerToken());
   accessTrigger.classList.toggle('configured', isOk);
+  const srcName = activeSource === 'datajud' ? 'Datajud' : 'Judit';
   if (isOk) {
-    accessTrigger.setAttribute('title', 'Credencial de usuário configurada');
-    accessTrigger.setAttribute('aria-label', 'Status: credencial de usuário configurada');
-    if (accessLabel) accessLabel.textContent = 'Credencial configurada';
+    accessTrigger.setAttribute('title', `Credencial configurada · Fonte: ${srcName}`);
+    accessTrigger.setAttribute('aria-label', `Status: credencial de usuário configurada · Fonte: ${srcName}`);
   } else {
-    accessTrigger.setAttribute('title', 'Falta credencial de usuário');
-    accessTrigger.setAttribute('aria-label', 'Status: falta credencial de usuário');
-    if (accessLabel) accessLabel.textContent = 'Falta credencial de usuário';
+    accessTrigger.setAttribute('title', `Falta credencial de usuário · Fonte: ${srcName}`);
+    accessTrigger.setAttribute('aria-label', `Status: falta credencial de usuário · Fonte: ${srcName}`);
   }
+  if (accessLabel) accessLabel.textContent = 'Credencial & Fonte';
 }
 
 function getHistory() {
@@ -952,15 +1003,26 @@ newSearchButton.addEventListener('click', () => {
 });
 
 const themeToggle = document.querySelector('#theme-toggle');
+const themeIcon = document.querySelector('#theme-icon');
+const themeLabelText = document.querySelector('#theme-label-text');
+
+function updateThemeUI(isDark) {
+  if (themeIcon) themeIcon.textContent = isDark ? '☀️' : '🌙';
+  if (themeLabelText) themeLabelText.textContent = isDark ? 'Modo claro' : 'Modo escuro';
+}
+
 const savedTheme = sessionStorage.getItem('rpy_theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
 if (savedTheme === 'dark') {
   document.body.classList.add('dark-mode');
-  if (themeToggle) themeToggle.textContent = '☀️';
+  updateThemeUI(true);
+} else {
+  updateThemeUI(false);
 }
+
 if (themeToggle) {
   themeToggle.addEventListener('click', () => {
     const isDark = document.body.classList.toggle('dark-mode');
-    themeToggle.textContent = isDark ? '☀️' : '🌙';
+    updateThemeUI(isDark);
     sessionStorage.setItem('rpy_theme', isDark ? 'dark' : 'light');
   });
 }

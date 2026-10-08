@@ -20,9 +20,9 @@
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
         <span>Histórico</span>
       </button>
-      <button id="access-trigger" class="access-trigger access-status-trigger" type="button" aria-expanded="false" aria-controls="auth-panel" title="Status da credencial de usuário" aria-label="Status da credencial de usuário">
+      <button id="access-trigger" class="access-trigger access-status-trigger" type="button" aria-expanded="false" aria-controls="auth-panel" title="Credencial de acesso e fonte (Judit / Datajud)" aria-label="Credencial de acesso e fonte">
         <span class="access-dot" aria-hidden="true"></span>
-        <span id="access-label" class="visually-hidden">Falta credencial de usuário</span>
+        <span id="access-label">Credencial &amp; Fonte</span>
       </button>
     </div>
   </div>
@@ -31,26 +31,11 @@
 <section class="workspace-intro" aria-labelledby="page-title">
   <p class="eyebrow">CONSULTA PROCESSUAL</p>
   <h1 id="page-title">Consulte e sintetize um processo.</h1>
-  <p class="lede">Informe o número CNJ e selecione a fonte desejada (Judit ou Datajud/CNJ). Se o processo ainda não estiver disponível no cache, você poderá solicitar a busca diretamente à fonte.</p>
+  <p class="lede">Informe o número CNJ para consultar e sintetizar o processo judicial. A consulta utiliza a fonte configurada (<strong id="intro-source-name">Judit</strong> por padrão).</p>
   <form id="search-form" class="search-form" novalidate>
-    <div class="source-picker-group">
-      <span class="source-picker-label">Fonte processual</span>
-      <div class="source-selector" role="radiogroup" aria-label="Selecione a fonte de consulta">
-        <button type="button" id="source-btn-judit" class="source-btn active" role="radio" aria-checked="true" data-source="judit">
-          <span class="source-radio-indicator" aria-hidden="true"></span>
-          <span class="source-text">
-            <strong>Judit</strong>
-            <span class="source-sub">Autos completos e peças</span>
-          </span>
-        </button>
-        <button type="button" id="source-btn-datajud" class="source-btn" role="radio" aria-checked="false" data-source="datajud">
-          <span class="source-radio-indicator" aria-hidden="true"></span>
-          <span class="source-text">
-            <strong>Datajud</strong>
-            <span class="source-sub">API Pública CNJ</span>
-          </span>
-        </button>
-      </div>
+    <div class="active-source-indicator">
+      <span class="source-indicator-badge">Fonte ativa: <strong id="current-source-name">Judit (Padrão)</strong></span>
+      <button type="button" id="open-auth-from-search" class="change-source-link">Alterar fonte na janela de credencial</button>
     </div>
     <label for="process-code">Número do processo</label>
     <div class="search-row">
@@ -65,38 +50,29 @@
 <section id="auth-panel" class="auth-panel" aria-labelledby="access-title" hidden>
   <div class="auth-copy">
     <p class="eyebrow">ACESSO E FONTES</p>
-    <h2 id="access-title">Credencial de usuário</h2>
-    <p>Informe o seu token de autorização (Bearer token) para autenticar as consultas na API do Rpy. As credenciais de infraestrutura das fontes (Judit e Datajud) são protegidas e gerenciadas com segurança no servidor.</p>
+    <h2 id="access-title">Credencial e Fonte</h2>
+    <p>Informe sua credencial Bearer para autorizar o acesso à API do Rpy e selecione a fonte processual preferencial (Judit ou Datajud). As chaves de infraestrutura das APIs são mantidas de forma segura no servidor.</p>
     
-    <div class="sources-card">
-      <p class="sources-card-title">Fontes integradas</p>
-      <div class="sources-list">
-        <div class="source-list-item">
-          <span class="source-status-pip" aria-hidden="true"></span>
-          <div class="source-list-item-content">
-            <strong>Judit</strong>
-            <span>Varredura integral de autos, intimações e peças processuais.</span>
-          </div>
-        </div>
-        <div class="source-list-item">
-          <span class="source-status-pip" aria-hidden="true"></span>
-          <div class="source-list-item-content">
-            <strong>Datajud (CNJ)</strong>
-            <span>Base oficial pública nacional do Conselho Nacional de Justiça.</span>
-          </div>
-        </div>
+    <div class="sources-security-note">
+      <div class="security-note-item">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="color:var(--accent);min-width:15px;margin-top:2px"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
+        <span><strong>Segurança:</strong> As credenciais das APIs Judit e Datajud são gerenciadas no backend e não são expostas no front.</span>
+      </div>
+      <div class="security-note-item">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="color:var(--accent);min-width:15px;margin-top:2px"><polyline points="20 6 9 17 4 12"></polyline></svg>
+        <span><strong>Padrão ativo:</strong> Judit selecionada por padrão para consulta completa de autos, peças e movimentações.</span>
       </div>
     </div>
 
-    <div style="margin-top:16px">
+    <div style="margin-top:18px">
       <button id="theme-toggle" class="button-secondary button-compact" type="button" aria-label="Alternar modo escuro" style="display:inline-flex;align-items:center;gap:6px">
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
+        <span id="theme-icon" aria-hidden="true">🌙</span>
         <span id="theme-label-text">Alternar modo escuro</span>
       </button>
     </div>
   </div>
   <div class="token-control">
-    <div style="margin-bottom:14px">
+    <div class="auth-field-block">
       <label for="bearer-token">Token de acesso do usuário (Bearer token)</label>
       <div class="token-row">
         <input id="bearer-token" type="password" autocomplete="off" placeholder="Cole seu token de autorização (Bearer token)">
@@ -106,8 +82,36 @@
         </button>
       </div>
       <p class="field-hint">Enviado no cabeçalho <code>Authorization: Bearer &lt;token&gt;</code> para controle de acesso ao ambiente.</p>
+      <p id="token-error" class="field-error" role="alert" hidden></p>
     </div>
-    <p id="token-error" class="field-error" role="alert" hidden></p>
+
+    <div class="auth-field-block" style="margin-top:20px">
+      <label id="source-selection-label">Fonte de consulta preferencial</label>
+      <div class="source-options-grid" role="radiogroup" aria-labelledby="source-selection-label">
+        <label id="source-option-judit" class="source-option-card active" for="source-radio-judit">
+          <input type="radio" id="source-radio-judit" name="process-source" value="judit" checked>
+          <div class="source-option-body">
+            <div class="source-option-header">
+              <strong class="source-option-title">Judit</strong>
+              <span class="source-tag-recommended">Preferência / Padrão</span>
+            </div>
+            <p class="source-option-desc">Varredura integral de autos, intimações e peças processuais.</p>
+          </div>
+        </label>
+
+        <label id="source-option-datajud" class="source-option-card" for="source-radio-datajud">
+          <input type="radio" id="source-radio-datajud" name="process-source" value="datajud">
+          <div class="source-option-body">
+            <div class="source-option-header">
+              <strong class="source-option-title">Datajud</strong>
+              <span class="source-tag-cnj">Base Pública CNJ</span>
+            </div>
+            <p class="source-option-desc">Base oficial pública nacional do Conselho Nacional de Justiça.</p>
+          </div>
+        </label>
+      </div>
+      <p class="field-hint">A fonte selecionada será utilizada para buscar os processos e gerar a síntese.</p>
+    </div>
   </div>
 </section>
 

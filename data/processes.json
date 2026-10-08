@@ -73,76 +73,50 @@
     }
   },
   "00000000020268210001": {
-    "code": "0000000-00.2026.8.21.0001",
-    "class_name": "Ação Cível",
-    "court": "TJRS",
-    "updated_at": "2026-10-08T01:56:03.567Z",
+    "code": "00000000020268210001",
+    "source": "datajud",
+    "class_name": "Procedimento Comum Cível",
+    "court": "TJSP (Datajud)",
+    "updated_at": "2026-10-08T05:03:11.062Z",
     "header": {
       "instance": 1,
-      "state": "RS",
-      "county": "Porto Alegre",
+      "state": "SP",
+      "county": "São Paulo",
       "amount": "50000.00",
-      "justice_description": "Estadual",
+      "justice_description": "Pública / CNJ Datajud",
       "area": "Cível"
     },
     "parties": [
       {
-        "name": "Empresa Alfa Ltda.",
+        "name": "Parte Autora",
         "side": "active",
         "person_type": "company"
       },
       {
-        "name": "Empresa Beta Ltda.",
+        "name": "Parte Ré",
         "side": "passive",
         "person_type": "company"
       }
     ],
     "subjects": [
       {
-        "name": "Contrato",
-        "code": "9583"
-      },
-      {
-        "name": "Obrigações",
+        "name": "Obrigações / Contratos",
         "code": "7699"
       }
     ],
     "recent_steps": [
       {
-        "occurred_at": "2026-03-18T12:00:00Z",
-        "title": "Contestação",
-        "text": "Contestação sintética apresentada para teste do fluxo do produto."
-      },
-      {
-        "occurred_at": "2026-02-05T12:00:00Z",
-        "title": "Citação",
-        "text": "Citação sintética registrada no ambiente de demonstração."
-      },
-      {
-        "occurred_at": "2026-01-10T12:00:00Z",
-        "title": "Distribuição",
-        "text": "Processo sintético distribuído para fins de demonstração local."
+        "occurred_at": "2026-10-08T05:03:11.062Z",
+        "title": "Juntada de Petição",
+        "text": "Movimentação registrada via Datajud (CNJ)."
       }
     ],
-    "attachments": [
-      {
-        "id": "att-1",
-        "name": "Petição Inicial.pdf",
-        "size": "1.2 MB",
-        "status": "processed"
-      },
-      {
-        "id": "att-2",
-        "name": "Contestação.pdf",
-        "size": "850 KB",
-        "status": "processed"
-      }
-    ],
+    "attachments": [],
     "summary_status": "ready",
     "summary": {
-      "markdown": "# Resumo do processo\n\nProcesso 0000000-00.2026.8.21.0001. Situação processual registrada.\n\n## Pontos de atenção\n- Nenhuma divergência objetiva identificada.\n- Prazo regular em curso.",
-      "created_at": "2026-10-08T01:56:03.567Z",
-      "model": "local-demo-no-provider"
+      "markdown": "# Resumo do processo (Datajud / CNJ)\n\nProcesso **00000000020268210001** consultado na fonte **Datajud (CNJ)**.\n\n- Fonte ativa: **Datajud (CNJ)**\n- Dados estruturados carregados com sucesso.",
+      "created_at": "2026-10-08T05:03:11.062Z",
+      "model": "datajud-cnj"
     }
   },
   "00012341820248210001_judit": {
@@ -445,6 +419,53 @@
     "summary": {
       "markdown": "# Resumo do processo (Datajud / CNJ)\n\nProcesso **0005678-50.2024.8.26.0100** consultado na fonte **Datajud (CNJ)**.\n\n- Fonte ativa: **Datajud (CNJ)**\n- Dados estruturados carregados com sucesso.",
       "created_at": "2026-10-08T04:17:52.866Z",
+      "model": "datajud-cnj"
+    }
+  },
+  "00000000020268210001_datajud": {
+    "code": "00000000020268210001",
+    "source": "datajud",
+    "class_name": "Procedimento Comum Cível",
+    "court": "TJSP (Datajud)",
+    "updated_at": "2026-10-08T05:03:11.062Z",
+    "header": {
+      "instance": 1,
+      "state": "SP",
+      "county": "São Paulo",
+      "amount": "50000.00",
+      "justice_description": "Pública / CNJ Datajud",
+      "area": "Cível"
+    },
+    "parties": [
+      {
+        "name": "Parte Autora",
+        "side": "active",
+        "person_type": "company"
+      },
+      {
+        "name": "Parte Ré",
+        "side": "passive",
+        "person_type": "company"
+      }
+    ],
+    "subjects": [
+      {
+        "name": "Obrigações / Contratos",
+        "code": "7699"
+      }
+    ],
+    "recent_steps": [
+      {
+        "occurred_at": "2026-10-08T05:03:11.062Z",
+        "title": "Juntada de Petição",
+        "text": "Movimentação registrada via Datajud (CNJ)."
+      }
+    ],
+    "attachments": [],
+    "summary_status": "ready",
+    "summary": {
+      "markdown": "# Resumo do processo (Datajud / CNJ)\n\nProcesso **00000000020268210001** consultado na fonte **Datajud (CNJ)**.\n\n- Fonte ativa: **Datajud (CNJ)**\n- Dados estruturados carregados com sucesso.",
+      "created_at": "2026-10-08T05:03:11.062Z",
       "model": "datajud-cnj"
     }
   }
