@@ -1,0 +1,6 @@
+{
+  "name": "Rpy — Inteligência processual",
+  "description": "Consulta e síntese inteligente de processos judiciais.",
+  "permissions": [],
+  "capabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
