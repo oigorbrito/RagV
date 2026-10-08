@@ -1,20 +1,75 @@
 import express from 'express';
 import path from 'path';
+import fs from 'fs';
 import { fileURLToPath } from 'url';
+import helmet from 'helmet';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
+app.use(helmet({ contentSecurityPolicy: false }));
 app.use(express.json({ limit: '10mb' }));
 
 // Serve static frontend
 app.use(express.static(path.join(__dirname, 'app', 'frontend')));
 
-// In-memory process store and webhook store (100% offline, zero-cost)
+const DATA_DIR = path.join(__dirname, 'data');
+if (!fs.existsSync(DATA_DIR)) {
+  try { fs.mkdirSync(DATA_DIR, { recursive: true }); } catch {}
+}
+const PROCESSES_FILE = path.join(DATA_DIR, 'processes.json');
+const REQUESTS_FILE = path.join(DATA_DIR, 'requests.json');
+
+// Persistent process store and webhook store
 const processes = new Map();
 const requestedProcesses = new Set();
 const webhookStore = new Map();
+
+try {
+  if (fs.existsSync(PROCESSES_FILE)) {
+    const data = JSON.parse(fs.readFileSync(PROCESSES_FILE, 'utf-8'));
+    for (const [k, v] of Object.entries(data)) {
+      processes.set(k, v);
+    }
+  }
+} catch (e) {
+  console.warn('Could not load persistent processes:', e);
+}
+
+try {
+  if (fs.existsSync(REQUESTS_FILE)) {
+    const data = JSON.parse(fs.readFileSync(REQUESTS_FILE, 'utf-8'));
+    data.forEach(item => requestedProcesses.add(item));
+  }
+} catch (e) {
+  console.warn('Could not load persistent requests:', e);
+}
+
+function persistState() {
+  try {
+    const procObj = Object.fromEntries(processes.entries());
+    fs.writeFileSync(PROCESSES_FILE, JSON.stringify(procObj, null, 2));
+    fs.writeFileSync(REQUESTS_FILE, JSON.stringify(Array.from(requestedProcesses.values()), null, 2));
+  } catch (e) {
+    console.warn('Could not persist state:', e);
+  }
+}
+
+function isValidCnj(cnj) {
+  const clean = String(cnj || '').replace(/\D/g, '');
+  if (clean.length !== 20) return false;
+  try {
+    const seq = clean.slice(0, 7);
+    const dv = clean.slice(7, 9);
+    const rest = clean.slice(9);
+    const base = BigInt(seq + rest);
+    const expected = 98n - ((base * 100n) % 97n);
+    return Number(expected) === parseInt(dv, 10);
+  } catch {
+    return true;
+  }
+}
 
 const DEMO_CODE = "0000000-00.2026.8.21.0001";
 const DEMO_CLEAN_CODE = "00000000020268210001";
@@ -69,8 +124,11 @@ const defaultDemoProcess = {
   }
 };
 
-processes.set(DEMO_CODE, defaultDemoProcess);
-processes.set(DEMO_CLEAN_CODE, defaultDemoProcess);
+if (!processes.has(DEMO_CODE)) {
+  processes.set(DEMO_CODE, defaultDemoProcess);
+  processes.set(DEMO_CLEAN_CODE, defaultDemoProcess);
+  persistState();
+}
 
 function checkAuth(req, res, next) {
   const authHeader = req.headers['authorization'];
@@ -128,6 +186,7 @@ app.post(['/webhook', '/judit/webhook', '/api/webhook', '/api/v1/webhook'], (req
     processes.set(cnjCode, webhookProcess);
     processes.set(cleanCode, webhookProcess);
     webhookStore.set(cleanCode, { tenantId, payload, receivedAt: new Date().toISOString() });
+    persistState();
   }
 
   res.json({
@@ -140,12 +199,16 @@ app.post(['/webhook', '/judit/webhook', '/api/webhook', '/api/v1/webhook'], (req
 app.get('/processes/:code', checkAuth, (req, res) => {
   const rawCode = req.params.code;
   const cleanCode = rawCode.replace(/\D/g, '');
+
+  if (!isValidCnj(rawCode)) {
+    return res.status(400).json({ error: 'Invalid CNJ format or verification digit check failed' });
+  }
   
   let proc = processes.get(rawCode) || processes.get(cleanCode);
 
   if (!proc) {
     if (cleanCode.length === 20) {
-      if (!requestedProcesses.has(cleanCode)) {
+      if (!requestedProcesses.has(cleanCode) && !requestedProcesses.has(rawCode)) {
         return res.status(404).json({ error: 'Process not found in local cache. Request required.' });
       }
       
@@ -193,6 +256,7 @@ app.get('/processes/:code', checkAuth, (req, res) => {
       };
       processes.set(rawCode, proc);
       processes.set(cleanCode, proc);
+      persistState();
     } else {
       return res.status(404).json({ error: 'Invalid CNJ format' });
     }
@@ -203,9 +267,13 @@ app.get('/processes/:code', checkAuth, (req, res) => {
 app.post('/processes/:code/request', checkAuth, (req, res) => {
   const rawCode = req.params.code;
   const cleanCode = rawCode.replace(/\D/g, '');
+  if (!isValidCnj(rawCode)) {
+    return res.status(400).json({ error: 'Invalid CNJ format or verification digit check failed' });
+  }
   if (cleanCode.length === 20) {
     requestedProcesses.add(cleanCode);
     requestedProcesses.add(rawCode);
+    persistState();
   }
   res.json({
     status: "available",
@@ -220,5 +288,5 @@ app.get('*', (req, res) => {
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, '0.0.0.0', () => {
-  console.log(`Rpy server running on http://0.0.0.0:${PORT} (Offline Zero-Cost Mode)`);
+  console.log(`Rpy server running on http://0.0.0.0:${PORT} (Offline Zero-Cost Mode with Security & Persistence)`);
 });
