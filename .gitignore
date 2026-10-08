@@ -22,6 +22,12 @@ build/
 dist/
 *.egg-info/
 
+# Node
+node_modules
+node_modules/
+**/node_modules/**
+pnpm-lock.yaml
+
 # Editors and OS
 .vscode/
 .idea/
