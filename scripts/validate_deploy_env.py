@@ -6,7 +6,7 @@ import json
 import math
 import os
 import re
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Callable
 
 from app.browser_origin_config import parse_browser_origins
@@ -301,7 +301,7 @@ def _validate_embedding_runtime(values: dict[str, str], errors: list[str]) -> No
             )
         elif any(marker in artifact_path.lower() for marker in PLACEHOLDER_MARKERS):
             errors.append("BGE_EMBEDDING_PATH still contains a placeholder value")
-        elif not Path(artifact_path).is_absolute():
+        elif not PurePosixPath(artifact_path).is_absolute():
             errors.append("BGE_EMBEDDING_PATH must be an absolute path inside the worker container")
         return
 

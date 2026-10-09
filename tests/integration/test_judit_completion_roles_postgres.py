@@ -27,11 +27,19 @@ async def test_completion_marker_runtime_roles_are_provisioned(monkeypatch: pyte
     assert TEST_DATABASE_URL is not None
     await migrate(TEST_DATABASE_URL)
 
+    import urllib.parse
+    def _swap_creds(url: str, user: str, pwd: str) -> str:
+        parsed = urllib.parse.urlparse(url)
+        netloc = f"{user}:{pwd}@{parsed.hostname}"
+        if parsed.port:
+            netloc += f":{parsed.port}"
+        return urllib.parse.urlunparse(parsed._replace(netloc=netloc))
+
     urls = {
-        "API_DATABASE_URL": TEST_DATABASE_URL.replace("postgres:postgres@", "rpy_api:api-password@"),
-        "WORKER_DATABASE_URL": TEST_DATABASE_URL.replace("postgres:postgres@", "rpy_worker:worker-password@"),
-        "SCHEDULER_DATABASE_URL": TEST_DATABASE_URL.replace("postgres:postgres@", "rpy_scheduler:scheduler-password@"),
-        "BACKUP_DATABASE_URL": TEST_DATABASE_URL.replace("postgres:postgres@", "rpy_backup:backup-password@"),
+        "API_DATABASE_URL": _swap_creds(TEST_DATABASE_URL, "rpy_api", "api-password"),
+        "WORKER_DATABASE_URL": _swap_creds(TEST_DATABASE_URL, "rpy_worker", "worker-password"),
+        "SCHEDULER_DATABASE_URL": _swap_creds(TEST_DATABASE_URL, "rpy_scheduler", "scheduler-password"),
+        "BACKUP_DATABASE_URL": _swap_creds(TEST_DATABASE_URL, "rpy_backup", "backup-password"),
     }
     for name, value in urls.items():
         monkeypatch.setenv(name, value)

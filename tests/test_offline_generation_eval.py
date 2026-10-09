@@ -65,10 +65,31 @@ def test_generation_regression_is_reported() -> None:
 
 
 def test_offline_generation_performs_no_network_calls(monkeypatch: pytest.MonkeyPatch) -> None:
-    def blocked_connect(*args, **kwargs):
-        raise AssertionError("offline generation evaluation attempted network access")
+    original_connect = socket.socket.connect
+
+    def blocked_connect(self, address, *args, **kwargs):
+        if isinstance(address, tuple) and address[0] == "127.0.0.1":
+            return original_connect(self, address, *args, **kwargs)
+        raise AssertionError(f"offline generation evaluation attempted network access to {address}")
 
     monkeypatch.setattr(socket.socket, "connect", blocked_connect)
     report = asyncio.run(_EVALUATOR.evaluate_generation(_EVALUATOR.load_dataset()))
     assert report["metrics"]["final_validation_pass_rate"] == 1.0
     assert report["metrics"]["secret_provider_call_rate"] == 0.0
+
+def test_blocked_connect_blocks_external_ips(monkeypatch: pytest.MonkeyPatch) -> None:
+    original_connect = socket.socket.connect
+
+    def blocked_connect(self, address, *args, **kwargs):
+        if isinstance(address, tuple) and address[0] == "127.0.0.1":
+            return original_connect(self, address, *args, **kwargs)
+        raise AssertionError(f"offline generation evaluation attempted network access to {address}")
+
+    monkeypatch.setattr(socket.socket, "connect", blocked_connect)
+    
+    s = socket.socket()
+    try:
+        with pytest.raises(AssertionError, match="offline generation evaluation attempted network access to"):
+            s.connect(("8.8.8.8", 53))
+    finally:
+        s.close()

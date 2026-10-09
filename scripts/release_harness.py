@@ -154,7 +154,7 @@ def main() -> int:
                 errors.append(f"NOTICE missing required provenance marker: {marker}")
 
         mode = smoke_sh.stat().st_mode
-        if not mode & stat.S_IXUSR:
+        if sys.platform != "win32" and not mode & stat.S_IXUSR:
             errors.append("scripts/smoke_offline.sh must remain executable")
         if "docker info" not in sh_text or "trap cleanup EXIT" not in sh_text:
             errors.append("Unix smoke must fail early on Docker daemon errors and keep cleanup trap")

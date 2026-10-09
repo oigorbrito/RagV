@@ -36,9 +36,12 @@ def read(path: Path) -> str:
 def iter_files() -> list[Path]:
     out: list[Path] = []
     for path in ROOT.rglob("*"):
-        if not path.is_file():
+        if any(part in SKIP_DIRS or part.startswith(".") or part.startswith("_") for part in path.parts):
             continue
-        if any(part in SKIP_DIRS for part in path.parts):
+        try:
+            if not path.is_file():
+                continue
+        except OSError:
             continue
         if path.suffix.lower() in TEXT_SUFFIXES:
             out.append(path)
