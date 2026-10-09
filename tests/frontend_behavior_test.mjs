@@ -127,11 +127,13 @@ function createHarness(fetchResponses, { apiBase = "same-origin" } = {}) {
   let clipboardText = "";
 
   const navLinks = [
-    { href: "#summary-title", listeners: {} },
-    { href: "#case-data-title", listeners: {} },
-    { href: "#movements-title", listeners: {} },
+    { href: "#summary-title", listeners: {}, attributes: new Map() },
+    { href: "#case-data-title", listeners: {}, attributes: new Map() },
+    { href: "#movements-title", listeners: {}, attributes: new Map() },
   ].map(link => ({
-    getAttribute(name) { return name === "href" ? link.href : null; },
+    getAttribute(name) { return name === "href" ? link.href : link.attributes.get(name) ?? null; },
+    setAttribute(name, value) { link.attributes.set(name, String(value)); },
+    removeAttribute(name) { link.attributes.delete(name); },
     addEventListener(type, handler) { link.listeners[type] = handler; },
     listeners: link.listeners,
   }));
@@ -211,6 +213,9 @@ function createHarness(fetchResponses, { apiBase = "same-origin" } = {}) {
     async clickNavLink(index) {
       assert.equal(typeof navLinks[index].listeners.click, "function", `navLink ${index} has no click listener`);
       await navLinks[index].listeners.click();
+    },
+    getNavLinkAttribute(index, name) {
+      return navLinks[index].getAttribute(name);
     },
     pagehide() {
       windowListeners.pagehide?.();
@@ -487,11 +492,16 @@ await scenario("bearer token field submits search on Enter", async () => {
   assert.equal(ui.requests[0].url, `/processes/${encodeURIComponent(VALID_CODE)}`);
 });
 
-await scenario("section navigation links shift focus to target headings", async () => {
+await scenario("section navigation links shift focus and update aria-current active state", async () => {
   const ui = createHarness([jsonResponse(200, readyPayload())]);
   await ui.search();
+  assert.equal(ui.getNavLinkAttribute(0, "aria-current"), "true");
+  assert.equal(ui.getNavLinkAttribute(1, "aria-current"), null);
+
   await ui.clickNavLink(1);
   assert.equal(ui.elements["case-data-title"].focused, true);
+  assert.equal(ui.getNavLinkAttribute(0, "aria-current"), null);
+  assert.equal(ui.getNavLinkAttribute(1, "aria-current"), "true");
 });
 
 await scenario("copy button resets label cleanly on rapid repeated clicks", async () => {
