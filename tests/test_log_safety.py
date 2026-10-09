@@ -161,6 +161,22 @@ def test_sanitize_error_message_redacts_compound_secret_keys() -> None:
     assert "refresh_token=[REDACTED]" in rendered
 
 
+def test_sanitize_error_message_redacts_connection_credential_fields() -> None:
+    rendered = sanitize_error_message(
+        "failed with passwd=pass_val_123, pwd=pass_val_456, "
+        "credential=cred_val_789 and credentials=cred_val_012"
+    )
+
+    assert "pass_val_123" not in rendered
+    assert "pass_val_456" not in rendered
+    assert "cred_val_789" not in rendered
+    assert "cred_val_012" not in rendered
+    assert "passwd=[REDACTED]" in rendered
+    assert "pwd=[REDACTED]" in rendered
+    assert "credential=[REDACTED]" in rendered
+    assert "credentials=[REDACTED]" in rendered
+
+
 @pytest.mark.parametrize("scheme", ["Bearer", "APIKey", "Basic", "Token", "Digest", "Negotiate", "OAuth"])
 def test_sanitize_error_message_redacts_authorization_schemes(scheme: str) -> None:
     rendered = sanitize_error_message(
@@ -177,8 +193,9 @@ _CREDENTIAL_ALPHABET = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123
 @settings(max_examples=120, deadline=None)
 @given(
     key=st.sampled_from((
-        "api_key", "api-key", "token", "access_token", "bearer", "password", "secret",
-        "secret_key", "private_key", "client_secret", "refresh_token", "auth_token", "access_key",
+        "api_key", "api-key", "token", "access_token", "bearer", "password", "passwd", "pwd",
+        "credential", "credentials", "secret", "secret_key", "private_key", "client_secret",
+        "refresh_token", "auth_token", "access_key",
     )),
     key_quote=st.sampled_from(("", '"', "'")),
     value_quote=st.sampled_from(("", '"', "'")),
