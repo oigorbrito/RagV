@@ -16,6 +16,7 @@ PERMISSIONS_POLICY = "camera=(), microphone=(), geolocation=(), payment=(), usb=
 
 SECURITY_RESPONSE_HEADERS = {
     "content-security-policy": CONTENT_SECURITY_POLICY,
+    "strict-transport-security": "max-age=31536000; includeSubDomains",
     "x-content-type-options": "nosniff",
     "x-frame-options": "DENY",
     "x-xss-protection": "0",
