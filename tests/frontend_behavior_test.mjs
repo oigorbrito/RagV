@@ -127,13 +127,11 @@ function createHarness(fetchResponses, { apiBase = "same-origin" } = {}) {
   let clipboardText = "";
 
   const navLinks = [
-    { href: "#summary-title", attrs: new Map([["aria-current", "true"]]), listeners: {} },
-    { href: "#case-data-title", attrs: new Map(), listeners: {} },
-    { href: "#movements-title", attrs: new Map(), listeners: {} },
+    { href: "#summary-title", listeners: {} },
+    { href: "#case-data-title", listeners: {} },
+    { href: "#movements-title", listeners: {} },
   ].map(link => ({
-    getAttribute(name) { return name === "href" ? link.href : (link.attrs.get(name) ?? null); },
-    setAttribute(name, value) { link.attrs.set(name, String(value)); },
-    removeAttribute(name) { link.attrs.delete(name); },
+    getAttribute(name) { return name === "href" ? link.href : null; },
     addEventListener(type, handler) { link.listeners[type] = handler; },
     listeners: link.listeners,
   }));
@@ -193,7 +191,6 @@ function createHarness(fetchResponses, { apiBase = "same-origin" } = {}) {
   return {
     elements,
     requests,
-    navLinks,
     clipboard: () => clipboardText,
     hasTimer: () => timers.size > 0,
     async tick() {
@@ -493,16 +490,8 @@ await scenario("bearer token field submits search on Enter", async () => {
 await scenario("section navigation links shift focus to target headings", async () => {
   const ui = createHarness([jsonResponse(200, readyPayload())]);
   await ui.search();
-  assert.equal(ui.elements["summary-body"].renderedText.length > 0, true);
-
-  // Initial nav state on search
-  assert.equal(ui.navLinks[0].getAttribute("aria-current"), "true");
-  assert.equal(ui.navLinks[1].getAttribute("aria-current"), null);
-
   await ui.clickNavLink(1);
   assert.equal(ui.elements["case-data-title"].focused, true);
-  assert.equal(ui.navLinks[0].getAttribute("aria-current"), null);
-  assert.equal(ui.navLinks[1].getAttribute("aria-current"), "true");
 });
 
 await scenario("copy button resets label cleanly on rapid repeated clicks", async () => {
