@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import math
 import re
+from collections import Counter
 from dataclasses import dataclass
+from functools import lru_cache
 from typing import Any, Sequence
 from uuid import UUID
 
@@ -73,8 +75,10 @@ class RankedStep:
     forced: bool = False
 
 
+@lru_cache(maxsize=4096)
 def tokenize(text: str) -> list[str]:
-    return [match.group(0).casefold() for match in _TOKEN_RE.finditer(text)]
+    # Use findall for direct extraction without Match object overhead
+    return [token.casefold() for token in _TOKEN_RE.findall(text)]
 
 
 def bm25_scores(
@@ -96,12 +100,25 @@ def bm25_scores(
         return {step.id: 0.0 for step in steps}
 
     docs = [tokenize(step.searchable_text) for step in steps]
-    avgdl = sum(len(doc) for doc in docs) / len(docs) or 1.0
     n_docs = len(docs)
-    doc_freq: dict[str, int] = {}
-    for term in set(query_terms):
-        doc_freq[term] = sum(1 for doc in docs if term in doc)
+    avgdl = sum(len(doc) for doc in docs) / n_docs or 1.0
 
+    # Group query term occurrences and pre-filter IDF computations
+    query_counts = Counter(query_terms)
+    doc_sets = [set(doc) for doc in docs]
+
+    active_terms: list[tuple[str, int, float]] = []
+    for term, count in query_counts.items():
+        df = sum(1 for doc_set in doc_sets if term in doc_set)
+        if df > 0:
+            idf = math.log(1.0 + (n_docs - df + 0.5) / (df + 0.5))
+            if idf > 0:
+                active_terms.append((term, count, idf))
+
+    if not active_terms:
+        return {step.id: 0.0 for step in steps}
+
+    k1_plus_1 = k1 + 1.0
     scores: dict[UUID, float] = {}
     for step, doc in zip(steps, docs, strict=True):
         frequencies: dict[str, int] = {}
@@ -109,14 +126,11 @@ def bm25_scores(
             frequencies[token] = frequencies.get(token, 0) + 1
         score = 0.0
         doc_len = len(doc)
-        for term in query_terms:
+        doc_b = k1 * (1.0 - b + b * doc_len / avgdl)
+        for term, count, idf in active_terms:
             tf = frequencies.get(term, 0)
-            if tf == 0:
-                continue
-            df = doc_freq.get(term, 0)
-            idf = math.log(1.0 + (n_docs - df + 0.5) / (df + 0.5))
-            denominator = tf + k1 * (1 - b + b * doc_len / avgdl)
-            score += idf * ((tf * (k1 + 1)) / denominator)
+            if tf > 0:
+                score += count * idf * ((tf * k1_plus_1) / (tf + doc_b))
         scores[step.id] = score
     return scores
 
