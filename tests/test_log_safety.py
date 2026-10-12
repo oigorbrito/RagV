@@ -174,11 +174,26 @@ def test_sanitize_error_message_redacts_authorization_schemes(scheme: str) -> No
 _CREDENTIAL_ALPHABET = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_-"
 
 
+def test_sanitize_error_message_redacts_webhook_and_callback_credentials() -> None:
+    rendered = sanitize_error_message(
+        "failed request to https://hooks.example.test/cb?webhook_token=dyn_webhook_secret_123 "
+        'and callback_token="dyn_callback_secret_456" with webhook_secret=top_secret_789'
+    )
+
+    assert "dyn_webhook_secret_123" not in rendered
+    assert "dyn_callback_secret_456" not in rendered
+    assert "top_secret_789" not in rendered
+    assert "webhook_token=[REDACTED]" in rendered
+    assert 'callback_token="[REDACTED]"' in rendered
+    assert "webhook_secret=[REDACTED]" in rendered
+
+
 @settings(max_examples=120, deadline=None)
 @given(
     key=st.sampled_from((
         "api_key", "api-key", "token", "access_token", "bearer", "password", "secret",
         "secret_key", "private_key", "client_secret", "refresh_token", "auth_token", "access_key",
+        "webhook_token", "webhook_secret", "callback_token", "callback_secret",
     )),
     key_quote=st.sampled_from(("", '"', "'")),
     value_quote=st.sampled_from(("", '"', "'")),
