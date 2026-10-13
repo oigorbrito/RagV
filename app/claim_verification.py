@@ -119,13 +119,35 @@ class _ClaimFacts:
         )
 
 
-def _normalized_text(value: Any) -> str:
-    rendered = unicodedata.normalize("NFKC", str(value or "")).casefold()
+@lru_cache(maxsize=4096)
+def _cached_normalized_text(value: str) -> str:
+    rendered = unicodedata.normalize("NFKC", value).casefold()
     return _SPACE_RE.sub(" ", rendered).strip()
 
 
+def _normalized_text(value: Any) -> str:
+    if value is None:
+        return ""
+    if not isinstance(value, str):
+        value = str(value)
+    if not value:
+        return ""
+    return _cached_normalized_text(value)
+
+
+@lru_cache(maxsize=4096)
+def _cached_normalized_exact_text(value: str) -> str:
+    return _cached_normalized_text(value).rstrip(" .;:!?")
+
+
 def _normalized_exact_text(value: Any) -> str:
-    return _normalized_text(value).rstrip(" .;:!?")
+    if value is None:
+        return ""
+    if not isinstance(value, str):
+        value = str(value)
+    if not value:
+        return ""
+    return _cached_normalized_exact_text(value)
 
 
 def _exact_text_segments(value: Any) -> frozenset[str]:
