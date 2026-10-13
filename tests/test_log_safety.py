@@ -73,6 +73,15 @@ def test_sanitize_error_message_redacts_api_key_tokens() -> None:
     assert rendered == f"Failed authentication for {REDACTED} and {REDACTED}"
 
 
+def test_sanitize_error_message_redacts_rpy_bearer_tokens() -> None:
+    rendered = sanitize_error_message(
+        "Failed authentication for rpy_tok_1234567890abcdef in request"
+    )
+
+    assert "rpy_tok_1234567890abcdef" not in rendered
+    assert rendered == f"Failed authentication for {REDACTED} in request"
+
+
 def test_sanitize_error_message_redacts_anthropic_api_key_token() -> None:
     rendered = sanitize_error_message(
         "provider failed for sk-ant-api03-abcdef1234567890-xyz"
