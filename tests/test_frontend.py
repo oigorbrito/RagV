@@ -62,6 +62,7 @@ def test_browser_security_headers_apply_to_frontend_api_and_errors()->None:
  client=TestClient(app)
  expected={
   "content-security-policy":"default-src 'self'; base-uri 'none'; object-src 'none'; frame-ancestors 'none'; frame-src 'none'; form-action 'self'",
+  "strict-transport-security":"max-age=63072000; includeSubDomains",
   "x-content-type-options":"nosniff",
   "x-frame-options":"DENY",
   "x-xss-protection":"0",
