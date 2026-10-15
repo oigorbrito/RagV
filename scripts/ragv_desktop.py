@@ -1,4 +1,4 @@
-﻿"""RagV Desktop: janela nativa para o frontend FastAPI existente."""
+"""RagV Desktop: janela nativa para o frontend FastAPI existente."""
 
 import sys
 import urllib.error
@@ -18,22 +18,27 @@ def api_ready():
         return False
 
 
+
+def show_error(message):
+    """Mostra um erro mesmo sem console no Windows."""
+    try:
+        import ctypes
+        ctypes.windll.user32.MessageBoxW(
+            None, message, "RagV Desktop", 0x10
+        )
+    except (AttributeError, OSError):
+        print(message, file=sys.stderr)
+
+
 def main():
     if not api_ready():
-        print(
-            "RagV indisponível. Inicie os serviços com "
-            "'docker compose up -d --build'.",
-            file=sys.stderr,
-        )
+        show_error("RagV indisponivel. Verifique o Docker e a API.")
         return 1
 
     try:
         import webview
     except ImportError:
-        print(
-            "Instale pywebview: python -m pip install pywebview",
-            file=sys.stderr,
-        )
+        show_error("O componente pywebview nao foi encontrado.")
         return 2
 
     webview.create_window(
