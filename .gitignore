@@ -36,3 +36,6 @@ tmp/
 
 # RagV Desktop - ambiente virtual local
 .venv-desktop/
+
+# Windows installer builds
+/dist-installer/
