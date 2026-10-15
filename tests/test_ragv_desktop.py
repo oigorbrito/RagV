@@ -69,7 +69,7 @@ class DesktopLauncherTests(unittest.TestCase):
         fake_windll = MagicMock()
         fake_windll.user32.MessageBoxW = mock_msgbox
 
-        with patch.object(desktop.ctypes, "windll", fake_windll, create=True):
+        with patch("ctypes.windll", fake_windll, create=True):
             desktop.show_error("Falha de teste")
 
         mock_msgbox.assert_called_once_with(
@@ -81,7 +81,7 @@ class DesktopLauncherTests(unittest.TestCase):
         fake_windll = MagicMock()
         fake_windll.user32.MessageBoxW.side_effect = OSError("sem suporte")
 
-        with patch.object(desktop.ctypes, "windll", fake_windll, create=True):
+        with patch("ctypes.windll", fake_windll, create=True):
             desktop.show_error("Erro de fallback")
 
         mock_stderr.write.assert_called()
