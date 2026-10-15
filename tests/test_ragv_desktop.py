@@ -64,18 +64,27 @@ class DesktopLauncherTests(unittest.TestCase):
         self.assertEqual(args[0], "RagV Desktop")
         self.assertEqual(args[1], desktop.URL)
 
-    @patch("ctypes.windll.user32.MessageBoxW", create=True)
-    def test_show_error_native_dialog(self, mock_msgbox):
-        desktop.show_error("Falha de teste")
+    def test_show_error_native_dialog(self):
+        mock_msgbox = MagicMock()
+        fake_windll = MagicMock()
+        fake_windll.user32.MessageBoxW = mock_msgbox
+
+        with patch.object(desktop.ctypes, "windll", fake_windll, create=True):
+            desktop.show_error("Falha de teste")
+
         mock_msgbox.assert_called_once_with(
             None, "Falha de teste", "RagV Desktop", 0x10
         )
 
     @patch("sys.stderr")
     def test_show_error_fallback(self, mock_stderr):
-        with patch("ctypes.windll.user32.MessageBoxW", side_effect=OSError("sem suporte"), create=True):
+        fake_windll = MagicMock()
+        fake_windll.user32.MessageBoxW.side_effect = OSError("sem suporte")
+
+        with patch.object(desktop.ctypes, "windll", fake_windll, create=True):
             desktop.show_error("Erro de fallback")
-            mock_stderr.write.assert_called()
+
+        mock_stderr.write.assert_called()
 
 
 if __name__ == "__main__":
