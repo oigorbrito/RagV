@@ -33,3 +33,6 @@ Thumbs.db
 *.pid
 .tmp/
 tmp/
+
+# RagV Desktop - ambiente virtual local
+.venv-desktop/
