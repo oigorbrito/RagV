@@ -16,8 +16,15 @@ try {
         throw "Docker Desktop não está em execução."
     }
 
-    docker compose up -d --no-build
+    # Rebuild only the API image that contains the served frontend assets.
+    docker compose build api
+    if ($LASTEXITCODE -ne 0) {
+        throw "Falha ao reconstruir a API RagV com os assets atuais."
+    }
 
+    # Keep existing images/services and persistent volumes; Compose only replaces
+    # services whose state changed (the API image in this startup path).
+    docker compose up -d --no-build
     if ($LASTEXITCODE -ne 0) {
         throw "Falha ao iniciar os serviços RagV."
     }

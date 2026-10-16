@@ -44,7 +44,9 @@ const form = document.querySelector('#search-form'),
   authStatus = document.querySelector('#auth-status'),
   sourceJuditRadio = document.querySelector('#source-judit'),
   sourceDataJudRadio = document.querySelector('#source-datajud'),
-  datajudStatusHint = document.querySelector('#datajud-status-hint');
+  datajudStatusHint = document.querySelector('#datajud-status-hint'),
+  apiConnectivity = document.querySelector('#api-connectivity'),
+  apiConnectivityLabel = document.querySelector('#api-connectivity-label');
 
 let currentSummary = '',
   pollTimer = null,
@@ -180,7 +182,13 @@ async function verifyAuthentication(token) {
 async function fetchCapabilities() {
   try {
     const response = await fetch(apiUrl('/capabilities'));
-    if (!response.ok) return;
+    if (!response.ok) {
+      if (apiConnectivity) apiConnectivity.classList.add('offline');
+      if (apiConnectivityLabel) apiConnectivityLabel.textContent = 'API RagV indisponível';
+      return;
+    }
+    if (apiConnectivity) apiConnectivity.classList.remove('offline');
+    if (apiConnectivityLabel) apiConnectivityLabel.textContent = 'API RagV conectada';
     const data = await response.json();
     availableCapabilities = data;
     const datajud = data.sources && data.sources.datajud;
@@ -205,7 +213,22 @@ async function fetchCapabilities() {
     }
   } catch {
     if (sourceDataJudRadio) sourceDataJudRadio.disabled = true;
+    if (apiConnectivity) apiConnectivity.classList.add('offline');
+    if (apiConnectivityLabel) apiConnectivityLabel.textContent = 'API RagV indisponível';
   }
+}
+
+function relativeElapsed(value) {
+  const timestamp = Date.parse(value);
+  if (!Number.isFinite(timestamp)) return '';
+  const elapsedSeconds = Math.max(0, (Date.now() - timestamp) / 1000);
+  const units = [
+    ['year', 31536000], ['month', 2592000], ['day', 86400],
+    ['hour', 3600], ['minute', 60],
+  ];
+  const [unit, seconds] = units.find(([, size]) => elapsedSeconds >= size) || ['second', 1];
+  const amount = unit === 'second' ? 0 : Math.floor(elapsedSeconds / seconds);
+  return new Intl.RelativeTimeFormat('pt-BR', { numeric: 'auto' }).format(-amount, unit);
 }
 
 function renderMarkdown(md, target) {
@@ -732,7 +755,11 @@ async function loadHistoryList() {
         const metaParts = [];
         if (item.court && item.court !== 'Não informado') metaParts.push(item.court);
         if (item.class_name && item.class_name !== 'Não informada') metaParts.push(item.class_name);
-        if (item.updated_at) metaParts.push('Atualizado: ' + formatDate(item.updated_at, { time: false }));
+        if (item.updated_at) {
+          metaParts.push('Atualizado: ' + formatDate(item.updated_at, { time: false }));
+          const elapsed = relativeElapsed(item.updated_at);
+          if (elapsed) metaParts.push('Consultado ' + elapsed);
+        }
         metaSpan.textContent = metaParts.join(' · ') || 'Sem metadados adicionais';
         mainInfo.append(codeStrong, metaSpan);
 

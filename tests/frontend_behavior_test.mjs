@@ -20,6 +20,7 @@ const ids = [
   "confirm-modal","confirm-modal-title","confirm-modal-desc","confirm-refresh-submit",
   "confirm-refresh-cancel","refresh-from-result",
   "verify-token","auth-status","source-judit","source-datajud","datajud-status-hint",
+  "api-connectivity","api-connectivity-label",
 ];
 
 class ClassList {
@@ -842,6 +843,7 @@ await scenario("listagem de histórico exibe processos do tenant e permite abrir
   ui.elements["bearer-token"].value = TOKEN;
   await ui.click("history-trigger");
 
+  assert.match(ui.elements["history-list"].children[0].renderedText, /Consultado há/);
   assert.equal(ui.elements["history-panel"].hidden, false);
   assert.equal(ui.requests.length, 1);
   assert.equal(ui.requests[0].url, "/processes?limit=50");
@@ -875,6 +877,24 @@ await scenario("Judit é a fonte padrão selecionada na inicialização", async 
   const ui = createHarness([]);
   assert.equal(ui.elements["source-judit"].checked, true);
   assert.equal(ui.elements["source-datajud"].checked, false);
+});
+
+await scenario("estado real de conectividade reflete a resposta da API", async () => {
+  const ui = createHarness([]);
+  await new Promise(r => setTimeout(r, 0));
+  assert.equal(ui.elements["api-connectivity-label"].textContent, "API RagV conectada");
+
+  const offline = createHarness([new Error("offline")], { hasExplicitCapabilities: true });
+  await new Promise(r => setTimeout(r, 0));
+  assert.equal(offline.elements["api-connectivity-label"].textContent, "API RagV indisponível");
+  assert.equal(offline.elements["api-connectivity"].classList.has("offline"), true);
+});
+
+await scenario("ícones informativos dos provedores são locais e acessíveis", async () => {
+  const html = fs.readFileSync("app/frontend/index.html", "utf8");
+  assert.match(html, /Judit[^<]*|provider-icon/);
+  assert.equal((html.match(/class="provider-icon"/g) || []).length, 2);
+  assert.equal((html.match(/aria-hidden="true"/g) || []).length >= 2, true);
 });
 
 await scenario("autenticação válida atualiza indicador com estado authenticated", async () => {
