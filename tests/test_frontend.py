@@ -4,12 +4,49 @@ from fastapi.testclient import TestClient
 from app.api import app
 FRONTEND=Path(__file__).parents[1]/"app"/"frontend"
 def test_frontend_routes_are_served_without_database_lifespan()->None:
- client=TestClient(app); index=client.get("/"); assert index.status_code==200; assert "Rpy" in index.text; assert "Número do processo" in index.text; assert "Bearer token" in index.text; assert "Ir para o conteúdo" in index.text; assert 'aria-live="polite"' in index.text; assert "Contexto do processo" in index.text; assert "Últimos acontecimentos" in index.text; assert client.get("/app.css").status_code==200; assert client.get("/config.js").status_code==200; assert client.get("/app.js").status_code==200
+ checks=unittest.TestCase()
+ client=TestClient(app); index=client.get("/")
+ checks.assertEqual(index.status_code,200)
+ for text in ("RagV","Número do processo","Bearer token","Ir para o conteúdo","Contexto do processo","Últimos acontecimentos"):
+  checks.assertIn(text,index.text)
+ checks.assertIn('aria-live="polite"',index.text)
+ for path in ("/app.css","/config.js","/app.js","/favicon.svg"):
+  checks.assertEqual(client.get(path).status_code,200)
 def test_frontend_assets_require_revalidation()->None:
  client=TestClient(app)
  checks=unittest.TestCase()
- for path in ("/","/app.css","/config.js","/app.js"):
+ for path in ("/","/app.css","/config.js","/app.js","/favicon.svg"):
   checks.assertEqual(client.get(path).headers["cache-control"],"no-cache, must-revalidate")
+
+
+def test_frontend_uses_canonical_ragv_identity_and_configure_access_panel()->None:
+ html=(FRONTEND/"index.html").read_text(encoding="utf-8")
+ checks=unittest.TestCase()
+ checks.assertIn("<title>RagV</title>",html)
+ checks.assertIn("aria-label=\"RagV — início\"",html)
+ checks.assertNotIn("Rpy",html)
+ checks.assertNotIn("Inteligência Processual",html)
+ checks.assertIn('id="auth-panel" class="auth-panel" aria-labelledby="access-title" hidden',html)
+ checks.assertIn('id="history-trigger"',html)
+ checks.assertIn('id="history-panel"',html)
+ checks.assertIn('href="favicon.svg"',html)
+
+
+def test_provider_names_have_exact_accessible_tooltips_without_static_explanations()->None:
+ html=(FRONTEND/"index.html").read_text(encoding="utf-8")
+ checks=unittest.TestCase()
+ checks.assertIn("Consulta processual para uso operacional. Pode gerar cobrança conforme o serviço contratado.",html)
+ checks.assertIn("API pública do CNJ para consulta de metadados processuais. Pode auxiliar em testes de conectividade, conforme a cobertura disponível.",html)
+ checks.assertEqual(html.count('class="provider-info"'),2)
+ checks.assertIn('id="judit-info"',html)
+ checks.assertIn('id="datajud-info"',html)
+ checks.assertNotIn('class="source-desc"',html)
+ checks.assertNotIn("DATAJUD_ENABLED=false",html)
+ checks.assertNotIn("DataJud desabilitado",html)
+ checks.assertNotIn("Fonte completa para busca processual",html)
+ checks.assertNotIn("Base pública do CNJ (metadados textuais). Não substitui",html)
+ checks.assertIn('value="judit" checked',html)
+ checks.assertIn('value="datajud" disabled',html)
 
 
 def test_frontend_does_not_persist_bearer_token_or_render_model_html()->None:
@@ -128,7 +165,7 @@ def test_frontend_supports_project_pages_and_configurable_api_origin()->None:
  checks=unittest.TestCase()
  checks.assertIn("function relativeElapsed",source)
  checks.assertIn('id="api-connectivity-label"',html)
- checks.assertEqual(html.count('class="provider-icon"'),2)
+ checks.assertEqual(html.count('class="provider-info"'),2)
  checks.assertIn('id="history-trigger"',html)
  checks.assertIn('id="confirm-modal"',html)
  assert "localStorage" not in source

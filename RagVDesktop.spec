@@ -23,6 +23,7 @@ exe = EXE(
     a.datas,
     [],
     name='RagVDesktop',
+    icon='app/frontend/ragv.ico',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,

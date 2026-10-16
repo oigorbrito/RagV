@@ -20,6 +20,7 @@ const ids = [
   "confirm-modal","confirm-modal-title","confirm-modal-desc","confirm-refresh-submit",
   "confirm-refresh-cancel","refresh-from-result",
   "verify-token","auth-status","source-judit","source-datajud","datajud-status-hint",
+  "judit-info","judit-info-wrap","judit-tooltip","datajud-info","datajud-info-wrap","datajud-tooltip",
   "api-connectivity","api-connectivity-label",
 ];
 
@@ -55,7 +56,7 @@ class ClassList {
 class Element {
   constructor(id) {
     this.id = id;
-    this.hidden = ["history-panel", "confirm-modal"].includes(id);
+    this.hidden = ["history-panel", "confirm-modal", "judit-tooltip", "datajud-tooltip"].includes(id);
     this.disabled = id === "source-datajud";
     this.value = "";
     this.textContent = "";
@@ -100,6 +101,12 @@ class Element {
 
   focus() {
     this.focused = true;
+    this.listeners.focus?.();
+  }
+
+  blur() {
+    this.focused = false;
+    this.listeners.blur?.();
   }
 
   scrollIntoView() {
@@ -241,6 +248,10 @@ function createHarness(fetchResponses, { apiBase = "same-origin", hasExplicitCap
       assert.equal(typeof elements[id].listeners.click, "function", `${id} has no click listener`);
       if (elements[id].disabled) return;
       await elements[id].listeners.click();
+    },
+    async dispatch(id, type, event = {}) {
+      assert.equal(typeof elements[id].listeners[type], "function", `${id} has no ${type} listener`);
+      await elements[id].listeners[type](event);
     },
     async changeRadio(id) {
       assert.equal(elements[id].type, "radio");
@@ -890,11 +901,33 @@ await scenario("estado real de conectividade reflete a resposta da API", async (
   assert.equal(offline.elements["api-connectivity"].classList.has("offline"), true);
 });
 
-await scenario("ícones informativos dos provedores são locais e acessíveis", async () => {
+await scenario("seleção dos provedores fica em Configurar acesso com tooltips exatos", async () => {
   const html = fs.readFileSync("app/frontend/index.html", "utf8");
-  assert.match(html, /Judit[^<]*|provider-icon/);
-  assert.equal((html.match(/class="provider-icon"/g) || []).length, 2);
-  assert.equal((html.match(/aria-hidden="true"/g) || []).length >= 2, true);
+  assert.match(html, /id="auth-panel"[^>]*hidden/);
+  assert.equal((html.match(/class="provider-info"/g) || []).length, 2);
+  assert.match(html, /Consulta processual para uso operacional\. Pode gerar cobrança conforme o serviço contratado\./);
+  assert.match(html, /API pública do CNJ para consulta de metadados processuais\. Pode auxiliar em testes de conectividade, conforme a cobertura disponível\./);
+  assert.equal((html.match(/aria-describedby="(?:judit|datajud)-tooltip"/g) || []).length, 2);
+});
+
+await scenario("tooltips de provedor abrem por clique, foco e mouse e fecham por Escape", async () => {
+  const ui = createHarness([]);
+  const tooltip = ui.elements["judit-tooltip"];
+  assert.equal(tooltip.hidden, true);
+  await ui.click("judit-info");
+  assert.equal(tooltip.hidden, false);
+  assert.equal(ui.elements["judit-info"].getAttribute("aria-expanded"), "true");
+  await ui.dispatch("judit-info", "keydown", { key: "Escape" });
+  assert.equal(tooltip.hidden, true);
+  ui.elements["judit-info"].focus();
+  assert.equal(tooltip.hidden, false);
+  ui.elements["judit-info"].blur();
+  assert.equal(tooltip.hidden, true);
+  await ui.dispatch("datajud-info", "pointerenter");
+  assert.equal(ui.elements["datajud-tooltip"].hidden, false);
+  await ui.dispatch("datajud-info-wrap", "pointerleave");
+  assert.equal(ui.elements["datajud-tooltip"].hidden, true);
+  assert.equal(ui.requests.length, 0);
 });
 
 await scenario("autenticação válida atualiza indicador com estado authenticated", async () => {
@@ -935,6 +968,25 @@ await scenario("indicador verde somente após validação real pelo backend", as
   assert.equal(ui.elements["access-trigger"].classList.has("authenticated"), true);
 });
 
+await scenario("DataJud desabilitado não troca silenciosamente a seleção para Judit", async () => {
+  const ui = createHarness([
+    jsonResponse(200, {
+      authenticated: false,
+      default_source: "judit",
+      sources: {
+        judit: { name: "Judit", configured: true, enabled: true, experimental: false },
+        datajud: { name: "DataJud", configured: false, enabled: false, experimental: true },
+      },
+    }),
+  ], { hasExplicitCapabilities: true });
+  ui.elements["source-datajud"].checked = true;
+  ui.elements["source-judit"].checked = false;
+  await new Promise(r => setTimeout(r, 10));
+  assert.equal(ui.elements["source-datajud"].disabled, true);
+  assert.equal(ui.elements["source-datajud"].checked, true);
+  assert.equal(ui.elements["source-judit"].checked, false);
+});
+
 await scenario("DataJud desabilitado por padrão no servidor", async () => {
   const ui = createHarness([
     jsonResponse(200, {
@@ -954,7 +1006,8 @@ await scenario("DataJud desabilitado por padrão no servidor", async () => {
   ], { hasExplicitCapabilities: true });
   await new Promise(r => setTimeout(r, 10));
   assert.equal(ui.elements["source-datajud"].disabled, true);
-  assert.ok(ui.elements["datajud-status-hint"].textContent.includes("DATAJUD_ENABLED=false"));
+  assert.equal(ui.elements["datajud-status-hint"].textContent, "DataJud indisponível");
+  assert.ok(!ui.elements["datajud-status-hint"].textContent.includes("DATAJUD_ENABLED"));
 });
 
 await scenario("DataJud sem autorização de uso no servidor permanece desabilitado", async () => {
@@ -977,7 +1030,8 @@ await scenario("DataJud sem autorização de uso no servidor permanece desabilit
   await new Promise(r => setTimeout(r, 10));
 
   assert.equal(ui.elements["source-datajud"].disabled, true);
-  assert.ok(ui.elements["datajud-status-hint"].textContent.includes("DATAJUD_AUTHORIZED_USE=true"));
+  assert.equal(ui.elements["datajud-status-hint"].textContent, "DataJud indisponível");
+  assert.ok(!ui.elements["datajud-status-hint"].textContent.includes("DATAJUD_AUTHORIZED_USE"));
 });
 
 await scenario("ausência de exposição de segredos em tela ou requisições", async () => {

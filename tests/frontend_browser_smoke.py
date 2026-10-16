@@ -104,6 +104,8 @@ def configure_ready_api(page: Page, payload: dict) -> list[dict]:
 
 
 def fill_lookup(page: Page) -> None:
+    if page.locator("#auth-panel").is_hidden():
+        page.locator("#access-trigger").click()
     page.locator("#bearer-token").fill(TOKEN)
     page.locator("#process-code").fill(VALID_CODE)
     page.locator("#search-submit").click()
@@ -125,9 +127,28 @@ def run() -> None:
             page.on("pageerror", lambda exc: page_errors.append(str(exc)))
 
             page.goto(origin, wait_until="networkidle")
-            assert page.title() == "Rpy — Inteligência processual"
+            assert page.title() == "RagV"
+            assert page.locator(".brand").inner_text() == "RagV"
+            assert page.locator(".brand-mark").is_visible()
             assert page.locator("#search-submit").is_visible()
+            assert page.locator("#history-trigger").is_visible()
+            assert page.locator("#auth-panel").is_hidden()
+            page.locator("#access-trigger").click()
+            assert page.locator("#auth-panel").is_visible()
             assert page.locator("#bearer-token").get_attribute("type") == "password"
+            assert page.locator("#source-judit").is_checked()
+            assert page.locator("#source-datajud").is_disabled()
+            assert page.locator("#api-connectivity-label").inner_text() == "API RagV conectada"
+            page.locator("#judit-info").click()
+            assert page.locator("#judit-tooltip").is_visible()
+            assert "Pode gerar cobrança" in page.locator("#judit-tooltip").inner_text()
+            page.keyboard.press("Escape")
+            assert page.locator("#judit-tooltip").is_hidden()
+            page.locator("#datajud-info").hover()
+            assert page.locator("#datajud-tooltip").is_visible()
+            assert "API pública do CNJ" in page.locator("#datajud-tooltip").inner_text()
+            page.locator("#access-trigger").click()
+            assert page.locator("#auth-panel").is_hidden()
 
             requests = configure_ready_api(page, ready_payload())
             fill_lookup(page)
