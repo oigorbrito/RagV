@@ -65,6 +65,7 @@ services:
       <<: *rpy-env
       JUDIT_API_KEY: ${JUDIT_API_KEY:-}
       JUDIT_TIMEOUT_SECONDS: ${JUDIT_TIMEOUT_SECONDS:-15}
+      JUDIT_CALLBACK_URL: ${JUDIT_CALLBACK_URL:-}
       JUDIT_ATTACHMENTS_ENABLED: ${JUDIT_ATTACHMENTS_ENABLED:-false}
       JUDIT_ATTACHMENT_DOWNLOAD_MODE: ${JUDIT_ATTACHMENT_DOWNLOAD_MODE:-}
     depends_on:
@@ -78,6 +79,7 @@ services:
     environment:
       <<: *rpy-env
       JUDIT_API_KEY: ${JUDIT_API_KEY:-}
+      JUDIT_CALLBACK_URL: ${JUDIT_CALLBACK_URL:-}
       JUDIT_TIMEOUT_SECONDS: ${JUDIT_TIMEOUT_SECONDS:-15}
     depends_on:
       migrate:
