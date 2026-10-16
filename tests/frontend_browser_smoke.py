@@ -14,6 +14,11 @@ VALID_CODE = "0000000-00.2026.8.21.0001"
 TOKEN = "browser-smoke-token"
 
 
+def _require(condition: bool, message: str) -> None:
+    if not condition:
+        raise RuntimeError(message)
+
+
 class FrontendHandler(SimpleHTTPRequestHandler):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, directory=str(FRONTEND), **kwargs)
@@ -127,38 +132,56 @@ def run() -> None:
             page.on("pageerror", lambda exc: page_errors.append(str(exc)))
 
             page.goto(origin, wait_until="networkidle")
-            assert page.title() == "RagV"
-            assert page.locator(".brand").inner_text() == "RagV"
-            assert page.locator(".brand-mark").is_visible()
-            assert page.locator("#search-submit").is_visible()
-            assert page.locator("#history-trigger").is_visible()
-            assert page.locator("#auth-panel").is_hidden()
+            _require(page.title() == "RagV", "document title must use RagV identity")
+            _require(page.locator(".brand").inner_text() == "RagV", "brand must read RagV")
+            _require(page.locator(".brand-mark").is_visible(), "RagV brand icon must be visible")
+            _require(page.locator("#search-submit").is_visible(), "process search must be visible")
+            _require(page.locator("#history-trigger").is_visible(), "history action must be visible")
+            _require(page.locator("#auth-panel").is_hidden(), "access panel must start closed")
             page.locator("#access-trigger").click()
-            assert page.locator("#auth-panel").is_visible()
-            assert page.locator("#bearer-token").get_attribute("type") == "password"
-            assert page.locator("#source-judit").is_checked()
-            assert page.locator("#source-datajud").is_disabled()
-            assert page.locator("#api-connectivity-label").inner_text() == "API RagV conectada"
+            _require(page.locator("#auth-panel").is_visible(), "access panel must open on request")
+            _require(
+                page.locator("#bearer-token").get_attribute("type") == "password",
+                "Bearer token field must be masked",
+            )
+            _require(page.locator("#source-judit").is_checked(), "Judit must be the default source")
+            _require(page.locator("#source-datajud").is_disabled(), "unconfigured DataJud must be disabled")
+            _require(
+                page.locator("#api-connectivity-label").inner_text() == "API RagV conectada",
+                "local API connectivity status must be rendered",
+            )
             page.locator("#judit-info").click()
-            assert page.locator("#judit-tooltip").is_visible()
-            assert "Pode gerar cobrança" in page.locator("#judit-tooltip").inner_text()
+            _require(page.locator("#judit-tooltip").is_visible(), "Judit tooltip must open")
+            _require(
+                "Pode gerar cobrança" in page.locator("#judit-tooltip").inner_text(),
+                "Judit tooltip must disclose possible charges",
+            )
             page.keyboard.press("Escape")
-            assert page.locator("#judit-tooltip").is_hidden()
+            _require(page.locator("#judit-tooltip").is_hidden(), "Escape must close the provider tooltip")
             page.locator("#datajud-info").hover()
-            assert page.locator("#datajud-tooltip").is_visible()
-            assert "API pública do CNJ" in page.locator("#datajud-tooltip").inner_text()
+            _require(page.locator("#datajud-tooltip").is_visible(), "DataJud tooltip must open")
+            _require(
+                "API pública do CNJ" in page.locator("#datajud-tooltip").inner_text(),
+                "DataJud tooltip must describe the public API",
+            )
             page.locator("#access-trigger").click()
-            assert page.locator("#auth-panel").is_hidden()
+            _require(page.locator("#auth-panel").is_hidden(), "access panel must be closable")
 
             requests = configure_ready_api(page, ready_payload())
             fill_lookup(page)
             page.locator("#result").wait_for(state="visible")
-            assert "Resumo pronto no navegador real." in page.locator("#summary-body").inner_text()
-            assert "Movimento público sintético." in page.locator("#movements-list").inner_text()
-            assert page.locator("#result-code").inner_text() == VALID_CODE
-            assert requests and requests[0]["method"] == "GET"
-            assert requests[0]["authorization"] == f"Bearer {TOKEN}"
-            assert TOKEN not in requests[0]["url"]
+            _require(
+                "Resumo pronto no navegador real." in page.locator("#summary-body").inner_text(),
+                "synthetic summary must render",
+            )
+            _require(
+                "Movimento público sintético." in page.locator("#movements-list").inner_text(),
+                "synthetic movement must render",
+            )
+            _require(page.locator("#result-code").inner_text() == VALID_CODE, "CNJ must render")
+            _require(bool(requests) and requests[0]["method"] == "GET", "lookup must be a read")
+            _require(requests[0]["authorization"] == f"Bearer {TOKEN}", "Bearer header must be sent")
+            _require(TOKEN not in requests[0]["url"], "Bearer token must not appear in the URL")
 
             page.unroute("**/processes/**")
             malicious = (
@@ -174,11 +197,17 @@ def run() -> None:
             fill_lookup(page)
             page.locator("#result").wait_for(state="visible")
             rendered = page.locator("#summary-body").inner_text()
-            assert "<img src=x onerror=alert(1)>" in rendered
-            assert page.locator("#summary-body img").count() == 0
-            assert page.locator('[data-component="ProcessHeader"]').count() == 1
-            assert page.locator('[data-component="Party"]').inner_text() == "Parte Sintética"
-            assert console_errors == [], console_errors
+            _require("<img src=x onerror=alert(1)>" in rendered, "unsupported markup must remain inert text")
+            _require(page.locator("#summary-body img").count() == 0, "summary must not create an image node")
+            _require(
+                page.locator('[data-component="ProcessHeader"]').count() == 1,
+                "allowlisted process header must render",
+            )
+            _require(
+                page.locator('[data-component="Party"]').inner_text() == "Parte Sintética",
+                "allowlisted synthetic party must render",
+            )
+            _require(console_errors == [], "browser console must have no errors")
             console_errors.clear()
 
             page.unroute("**/processes/**")
@@ -201,11 +230,14 @@ def run() -> None:
                 'document.querySelector("#status-title").textContent.includes("Consulta registrada")'
             )
 
-            assert all(
-                "Failed to load resource: the server responded with a status of 404" in error
-                for error in console_errors
-            ), console_errors
-            assert page_errors == [], page_errors
+            _require(
+                all(
+                    "Failed to load resource: the server responded with a status of 404" in error
+                    for error in console_errors
+                ),
+                "only the expected synthetic 404 may appear in the console",
+            )
+            _require(page_errors == [], "browser page must have no uncaught errors")
             browser.close()
     finally:
         server.shutdown()

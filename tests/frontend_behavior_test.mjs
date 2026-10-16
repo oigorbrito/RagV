@@ -99,6 +99,21 @@ class Element {
     this.listeners[type] = handler;
   }
 
+  click() {
+    const listener = this.listeners.click;
+    if (typeof listener !== "function") throw new Error(`${this.id} has no click listener`);
+    return listener({ target: this });
+  }
+
+  dispatch(type, event = {}) {
+    switch (type) {
+      case "keydown": return this.listeners.keydown?.(event);
+      case "pointerenter": return this.listeners.pointerenter?.(event);
+      case "pointerleave": return this.listeners.pointerleave?.(event);
+      default: throw new Error(`unsupported synthetic event: ${type}`);
+    }
+  }
+
   focus() {
     this.focused = true;
     this.listeners.focus?.();
@@ -161,6 +176,11 @@ function createHarness(fetchResponses, { apiBase = "same-origin", hasExplicitCap
   ].map(link => ({
     getAttribute(name) { return name === "href" ? link.href : null; },
     addEventListener(type, handler) { link.listeners[type] = handler; },
+    click() {
+      const listener = link.listeners.click;
+      if (typeof listener !== "function") throw new Error("navigation link has no click listener");
+      return listener();
+    },
     listeners: link.listeners,
   }));
 
@@ -245,13 +265,11 @@ function createHarness(fetchResponses, { apiBase = "same-origin", hasExplicitCap
       await elements["search-form"].listeners.submit({ preventDefault() {} });
     },
     async click(id) {
-      assert.equal(typeof elements[id].listeners.click, "function", `${id} has no click listener`);
       if (elements[id].disabled) return;
-      await elements[id].listeners.click();
+      await elements[id].click();
     },
     async dispatch(id, type, event = {}) {
-      assert.equal(typeof elements[id].listeners[type], "function", `${id} has no ${type} listener`);
-      await elements[id].listeners[type](event);
+      await elements[id].dispatch(type, event);
     },
     async changeRadio(id) {
       assert.equal(elements[id].type, "radio");
@@ -264,8 +282,7 @@ function createHarness(fetchResponses, { apiBase = "same-origin", hasExplicitCap
       elements[id].listeners.change?.({ target: elements[id] });
     },
     async clickNavLink(index) {
-      assert.equal(typeof navLinks[index].listeners.click, "function", `navLink ${index} has no click listener`);
-      await navLinks[index].listeners.click();
+      await navLinks[index].click();
     },
     pagehide() {
       windowListeners.pagehide?.();
