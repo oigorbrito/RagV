@@ -1,4 +1,5 @@
 from pathlib import Path
+import unittest
 from fastapi.testclient import TestClient
 from app.api import app
 FRONTEND=Path(__file__).parents[1]/"app"/"frontend"
@@ -97,10 +98,13 @@ def test_desktop_launcher_rebuilds_api_without_discarding_compose_state()->None:
  build_error=script.index("Falha ao reconstruir a API RagV", build)
  start=script.index("docker compose up -d --no-build", build_error)
  start_error=script.index("Falha ao iniciar os serviços RagV", start)
- assert build < build_error < start < start_error
- assert "docker compose down" not in script
- assert "volume rm" not in script
- assert "docker volume" not in script
+ checks=unittest.TestCase()
+ checks.assertLess(build,build_error)
+ checks.assertLess(build_error,start)
+ checks.assertLess(start,start_error)
+ checks.assertNotIn("docker compose down",script)
+ checks.assertNotIn("volume rm",script)
+ checks.assertNotIn("docker volume",script)
 
 
 def test_frontend_supports_project_pages_and_configurable_api_origin()->None:
