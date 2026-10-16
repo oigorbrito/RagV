@@ -18,7 +18,11 @@ from app.api_key_auth import (
 from app.attachment_signals import attachment_status_flags
 from app.auth import principal_from_request, principal_from_request_unscoped, tenant_from_request
 from app.claim_evidence import claim_evidence_is_publishable, load_summary_claim_evidence
-from app.datajud_client import datajud_config, lookup_datajud_metadata
+from app.datajud_client import (
+    datajud_alias_from_cnj,
+    datajud_config,
+    lookup_datajud_metadata,
+)
 from app.judit import normalize_cnj
 from app.json_utils import decode_json_object, loads_strict_json
 from app.process_query_safety import classify_cnj_status, create_authorization
@@ -997,10 +1001,10 @@ async def v1_get_datajud_metadata(code: str, request: Request) -> dict[str, Any]
         "code": canonical_code,
         "source": "datajud",
         "class_name": md.class_name,
-        "court": md.court,
+        "court": datajud_alias_from_cnj(canonical_code).upper(),
         "adjudicating_body": md.adjudicating_body,
         "county": md.county,
-        "subjects": [s.description for s in md.subjects],
-        "parties": [{"name": p.name, "role": p.role, "side": p.side} for p in md.parties],
+        "subjects": [dict(subject) for subject in md.subjects],
+        "parties": [],
     }
 

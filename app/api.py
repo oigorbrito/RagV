@@ -16,7 +16,11 @@ from app.api_v1 import router as api_v1_router
 from app.auth import configured_bearer_tokens, tenant_from_request
 from app.browser_origins import BrowserProcessCorsMiddleware
 from app.claim_evidence import claim_evidence_is_publishable, load_summary_claim_evidence
-from app.datajud_client import datajud_config, lookup_datajud_metadata
+from app.datajud_client import (
+    datajud_alias_from_cnj,
+    datajud_config,
+    lookup_datajud_metadata,
+)
 from app.db import create_pool
 from app.frontend import router as frontend_router
 from app.http_auth_config import validate_http_auth_config
@@ -229,11 +233,11 @@ async def get_datajud_metadata(code: str, request: Request) -> dict[str, Any]:
         "code": canonical_code,
         "source": "datajud",
         "class_name": md.class_name,
-        "court": md.court,
+        "court": datajud_alias_from_cnj(canonical_code).upper(),
         "adjudicating_body": md.adjudicating_body,
         "county": md.county,
-        "subjects": [s.description for s in md.subjects],
-        "parties": [{"name": p.name, "role": p.role, "side": p.side} for p in md.parties],
+        "subjects": [dict(subject) for subject in md.subjects],
+        "parties": [],
     }
 
 
