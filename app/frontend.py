@@ -15,19 +15,34 @@ _FRONTEND_DIR = Path(__file__).with_name("frontend")
 
 @router.get("/", include_in_schema=False)
 async def frontend_index() -> FileResponse:
-    return FileResponse(_FRONTEND_DIR / "index.html")
+    return FileResponse(
+        _FRONTEND_DIR / "index.html",
+        headers={"Cache-Control": "no-cache, must-revalidate"},
+    )
 
 
 @router.get("/app.css", include_in_schema=False)
 async def frontend_css() -> FileResponse:
-    return FileResponse(_FRONTEND_DIR / "app.css", media_type="text/css")
+    return FileResponse(
+        _FRONTEND_DIR / "app.css",
+        media_type="text/css",
+        headers={"Cache-Control": "no-cache, must-revalidate"},
+    )
 
 
 @router.get("/config.js", include_in_schema=False)
 async def frontend_config() -> FileResponse:
-    return FileResponse(_FRONTEND_DIR / "config.js", media_type="text/javascript")
+    return FileResponse(
+        _FRONTEND_DIR / "config.js",
+        media_type="text/javascript",
+        headers={"Cache-Control": "no-cache, must-revalidate"},
+    )
 
 
 @router.get("/app.js", include_in_schema=False)
 async def frontend_js() -> FileResponse:
-    return FileResponse(_FRONTEND_DIR / "app.js", media_type="text/javascript")
+    return FileResponse(
+        _FRONTEND_DIR / "app.js",
+        media_type="text/javascript",
+        headers={"Cache-Control": "no-cache, must-revalidate"},
+    )

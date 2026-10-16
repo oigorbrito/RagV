@@ -12,7 +12,10 @@ import asyncpg
 from playwright.async_api import async_playwright
 
 STAGING_URL = os.environ.get("RPY_STAGING_DATABASE_URL", "postgresql://127.0.0.1:5435/rpy_staging")
-API_ORIGIN = "http://127.0.0.1:8008"
+API_ORIGIN = os.environ.get("RPY_STAGING_API_ORIGIN", "http://127.0.0.1:8008")
+API_TARGET = urlsplit(API_ORIGIN)
+if API_TARGET.scheme != "http" or API_TARGET.hostname not in {"127.0.0.1", "localhost"}:
+    raise RuntimeError("staging API must use a loopback HTTP URL")
 ARTIFACT_DIR = Path(os.environ.get("RPY_STAGING_EVIDENCE_DIR", "staging_evidence"))
 ARTIFACT_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -41,14 +44,16 @@ def run_http_json(url: str, method: str = "GET", headers: dict | None = None, da
         h["Content-Type"] = "application/json"
     parsed_url = urlsplit(url)
     if (
-        parsed_url.scheme != "http"
-        or parsed_url.hostname != "127.0.0.1"
-        or parsed_url.port != 8008
+        parsed_url.scheme != API_TARGET.scheme
+        or parsed_url.hostname != API_TARGET.hostname
+        or parsed_url.port != API_TARGET.port
         or parsed_url.username is not None
         or parsed_url.password is not None
     ):
         raise ValueError("staging validation only permits its local API endpoint")
-    connection = http.client.HTTPConnection("127.0.0.1", 8008, timeout=30)
+    connection = http.client.HTTPConnection(
+        API_TARGET.hostname, API_TARGET.port or 80, timeout=30
+    )
     try:
         path = parsed_url.path or "/"
         if parsed_url.query:
@@ -121,12 +126,12 @@ async def run_playwright_scenarios():
         await page.locator("#verify-token").click()
         await page.wait_for_timeout(1000)
 
-        screenshot_b_inv = ARTIFACT_DIR / "cenario_b_auth_invalida.png"
-        await page.locator("#bearer-token").fill("")
-        await page.screenshot(path=str(screenshot_b_inv), full_page=True)
-
         auth_class_inv = (await page.locator("#access-trigger").get_attribute("class")) or ""
         token_err = await page.locator("#token-error").inner_text()
+        screenshot_b_inv = ARTIFACT_DIR / "cenario_b_auth_invalida.png"
+        await page.locator("#bearer-token").evaluate("element => { element.value = ''; }")
+        await page.screenshot(path=str(screenshot_b_inv), full_page=True)
+        await page.locator("#bearer-token").fill(TOKEN_A)
         record("Cenário B: Rejeição de credencial inválida", "invalid" in auth_class_inv, f"Indicator has 'invalid' class. Token error displayed: '{token_err}'")
 
         # Valid token verification
@@ -134,12 +139,12 @@ async def run_playwright_scenarios():
         await page.locator("#verify-token").click()
         await page.wait_for_timeout(1000)
 
-        screenshot_b_val = ARTIFACT_DIR / "cenario_b_auth_valida.png"
-        await page.locator("#bearer-token").fill("")
-        await page.screenshot(path=str(screenshot_b_val), full_page=True)
-
         auth_class_val = (await page.locator("#access-trigger").get_attribute("class")) or ""
         access_label_val = (await page.locator("#access-label").inner_text()).strip()
+        screenshot_b_val = ARTIFACT_DIR / "cenario_b_auth_valida.png"
+        await page.locator("#bearer-token").evaluate("element => { element.value = ''; }")
+        await page.screenshot(path=str(screenshot_b_val), full_page=True)
+        await page.locator("#bearer-token").fill(TOKEN_A)
         record("Cenário B: Validação real no backend", "authenticated" in auth_class_val and access_label_val == "Acesso autenticado", f"Indicator has 'authenticated' class. Access label: '{access_label_val}'")
         record("Cenário B: Screenshots salvos", screenshot_b_inv.exists() and screenshot_b_val.exists(), "Saved invalid and valid auth screenshots")
 
