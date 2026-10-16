@@ -3,9 +3,8 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+import http.client
 from pathlib import Path
-import urllib.request
-import urllib.error
 from urllib.parse import urlsplit
 from uuid import UUID
 
@@ -49,16 +48,21 @@ def run_http_json(url: str, method: str = "GET", headers: dict | None = None, da
         or parsed_url.password is not None
     ):
         raise ValueError("staging validation only permits its local API endpoint")
-    req = urllib.request.Request(url, data=body, headers=h, method=method)
+    connection = http.client.HTTPConnection("127.0.0.1", 8008, timeout=30)
     try:
-        with urllib.request.urlopen(req) as resp:
-            return resp.status, json.loads(resp.read().decode("utf-8")), resp.headers
-    except urllib.error.HTTPError as e:
-        raw = e.read().decode("utf-8")
+        path = parsed_url.path or "/"
+        if parsed_url.query:
+            path += f"?{parsed_url.query}"
+        connection.request(method, path, body=body, headers=h)
+        response = connection.getresponse()
+        raw = response.read().decode("utf-8")
         try:
-            return e.code, json.loads(raw), e.headers
-        except Exception:
-            return e.code, {"raw": raw}, e.headers
+            payload = json.loads(raw)
+        except json.JSONDecodeError:
+            payload = {"raw": raw}
+        return response.status, payload, response.headers
+    finally:
+        connection.close()
 
 
 async def run_db_scenarios():
