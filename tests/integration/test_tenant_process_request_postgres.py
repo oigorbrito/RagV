@@ -109,7 +109,7 @@ async def test_ambiguous_provider_failure_is_terminal_and_not_automatically_retr
             assert first.status_code==202 and first.json()["created"] is True
             assert await _worker(pool).process_one() is True
             repeated=await client.post(f"/processes/{CNJ}/request",headers=headers)
-            assert repeated.status_code==202 and repeated.json()["created"] is False
+            assert repeated.status_code==409
         async with pool.acquire() as conn:
             request_status=await conn.fetchval("SELECT status FROM tenant_judit_requests WHERE tenant_id=$1 AND process_code=$2",tenant_id,CNJ)
             job=await conn.fetchrow("SELECT status::text AS status, attempts, max_attempts FROM jobs WHERE task_name='request_judit_process'")
