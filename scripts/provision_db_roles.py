@@ -33,6 +33,8 @@ API_READ_TABLES = (
     "judit_deliveries",
     "judit_request_completions",
     "backup_runs",
+    "acquisition_authorizations",
+    "tenant_judit_request_history",
 )
 
 
@@ -107,10 +109,10 @@ async def provision(database_url: str) -> None:
                 f"GRANT SELECT ON {', '.join(_quote_ident(t) for t in API_READ_TABLES)} TO {api}"
             )
             await conn.execute(
-                f"GRANT INSERT, UPDATE ON processes, process_versions, tenant_judit_requests, public_summary_requests, judit_trackings TO {api}"
+                f"GRANT INSERT, UPDATE ON processes, process_versions, tenant_judit_requests, public_summary_requests, judit_trackings, acquisition_authorizations TO {api}"
             )
             await conn.execute(
-                "GRANT INSERT ON access_log, judit_deliveries, judit_request_completions, jobs, tenant_processes TO "
+                "GRANT INSERT ON access_log, judit_deliveries, judit_request_completions, jobs, tenant_processes, tenant_judit_request_history TO "
                 f"{api}"
             )
 

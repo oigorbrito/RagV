@@ -9,6 +9,12 @@ import asyncpg
 
 from app.db import create_pool
 from app.judit_client import JuditRequestError, create_lawsuit_request
+from app.process_query_safety import (
+    AmbiguousFailureError,
+    InvalidAuthorizationError,
+    RefreshRequiresConfirmationError,
+    consume_authorization,
+)
 from app.public_lifecycle import (
     link_summary_request_to_acquisition,
     transition_requests_for_acquisition,
@@ -65,6 +71,8 @@ async def request_process(
     tenant_id: UUID,
     code: str,
     public_summary_request_id: UUID | None = None,
+    authorization_token: str | None = None,
+    allow_refresh: bool = False,
 ) -> ProcessRequestResult:
     """Durably register a tenant/CNJ acquisition without provider I/O.
 
@@ -79,10 +87,165 @@ async def request_process(
     async with pool.acquire() as conn:
         async with conn.transaction():
             existing = await conn.fetchrow(
-                "SELECT id, judit_request_id, status, attempt_number FROM tenant_judit_requests WHERE tenant_id=$1 AND process_code=$2 FOR UPDATE",
+                "SELECT id, judit_request_id, status, attempt_number, created_at, completed_at FROM tenant_judit_requests WHERE tenant_id=$1 AND process_code=$2 FOR UPDATE",
                 tenant_id,
                 code,
             )
+
+            # Invariant: Never repeat failed_ambiguous automatically
+            if existing is not None and existing["status"] == "failed_ambiguous":
+                raise AmbiguousFailureError(
+                    f"process {code} acquisition is blocked due to an ambiguous provider failure"
+                )
+
+            # Check if process already exists for this tenant
+            process_exists = await conn.fetchval(
+                """
+                SELECT EXISTS(
+                    SELECT 1 FROM tenant_processes tp
+                    JOIN processes p ON p.id = tp.process_id
+                    WHERE tp.tenant_id = $1 AND p.code = $2
+                )
+                """,
+                tenant_id,
+                code,
+            )
+
+            # If an authorization token was explicitly provided, validate and consume it first
+            if authorization_token:
+                if process_exists:
+                    await consume_authorization(
+                        conn,
+                        token=authorization_token,
+                        tenant_id=tenant_id,
+                        code=code,
+                        source="judit",
+                        operation="refresh",
+                        request_id=existing["id"] if existing else None,
+                    )
+                else:
+                    try:
+                        await consume_authorization(
+                            conn,
+                            token=authorization_token,
+                            tenant_id=tenant_id,
+                            code=code,
+                            source="judit",
+                            operation="acquisition",
+                            request_id=existing["id"] if existing else None,
+                        )
+                    except InvalidAuthorizationError:
+                        await consume_authorization(
+                            conn,
+                            token=authorization_token,
+                            tenant_id=tenant_id,
+                            code=code,
+                            source="judit",
+                            operation="refresh",
+                            request_id=existing["id"] if existing else None,
+                        )
+
+            # If process already exists for this tenant: this is a refresh operation
+            if process_exists:
+                if not authorization_token:
+                    if public_summary_request_id is not None and existing is not None:
+                        await _link_public_request(
+                            conn,
+                            public_summary_request_id=public_summary_request_id,
+                            tenant_id=tenant_id,
+                            code=code,
+                            tenant_judit_request_id=existing["id"],
+                            already_fetching=bool(existing["judit_request_id"]),
+                        )
+                    if allow_refresh:
+                        raise RefreshRequiresConfirmationError(
+                            "process already exists in history; refresh requires explicit confirmation authorization"
+                        )
+                    return ProcessRequestResult(
+                        request_id=str(existing["judit_request_id"] if existing else ""),
+                        created=False,
+                    )
+
+                if existing is not None:
+                    await conn.execute(
+                        """
+                        INSERT INTO tenant_judit_request_history (
+                            tenant_request_id,
+                            tenant_id,
+                            process_code,
+                            judit_request_id,
+                            status,
+                            attempt_number,
+                            created_at,
+                            completed_at
+                        )
+                        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+                        """,
+                        existing["id"],
+                        tenant_id,
+                        code,
+                        existing["judit_request_id"],
+                        existing["status"],
+                        existing["attempt_number"],
+                        existing["created_at"],
+                        existing["completed_at"],
+                    )
+                    await conn.execute(
+                        """
+                        UPDATE tenant_judit_requests
+                        SET status = 'processing',
+                            judit_request_id = NULL,
+                            completed_at = NULL,
+                            attempt_number = 1,
+                            created_at = NOW()
+                        WHERE id = $1
+                        """,
+                        existing["id"],
+                    )
+                    request_row_id = existing["id"]
+                else:
+                    row = await conn.fetchrow(
+                        """
+                        INSERT INTO tenant_judit_requests (tenant_id, process_code, status, attempt_number)
+                        VALUES ($1, $2, 'processing', 1)
+                        ON CONFLICT (tenant_id, process_code) DO UPDATE
+                        SET status = 'processing',
+                            judit_request_id = NULL,
+                            completed_at = NULL,
+                            attempt_number = 1,
+                            created_at = NOW()
+                        RETURNING id
+                        """,
+                        tenant_id,
+                        code,
+                    )
+                    request_row_id = row["id"]
+
+                await _link_public_request(
+                    conn,
+                    public_summary_request_id=public_summary_request_id,
+                    tenant_id=tenant_id,
+                    code=code,
+                    tenant_judit_request_id=request_row_id,
+                    already_fetching=False,
+                )
+                await _enqueue_acquisition(conn, request_row_id=request_row_id, attempt=1)
+                return ProcessRequestResult(request_id="", created=True)
+
+            # If an acquisition is already processing, don't duplicate paid work
+            if existing is not None and existing["status"] == "processing":
+                await _link_public_request(
+                    conn,
+                    public_summary_request_id=public_summary_request_id,
+                    tenant_id=tenant_id,
+                    code=code,
+                    tenant_judit_request_id=existing["id"],
+                    already_fetching=bool(existing["judit_request_id"]),
+                )
+                return ProcessRequestResult(
+                    request_id=str(existing["judit_request_id"] or ""), created=False
+                )
+
             if existing is not None:
                 if existing["status"] == "failed_retryable" and int(existing["attempt_number"]) < 100:
                     attempt = int(existing["attempt_number"]) + 1
@@ -118,22 +281,38 @@ async def request_process(
                 """
                 INSERT INTO tenant_judit_requests (tenant_id, process_code, status, attempt_number)
                 VALUES ($1, $2, 'processing', 1)
+                ON CONFLICT (tenant_id, process_code) DO NOTHING
                 RETURNING id
                 """,
                 tenant_id,
                 code,
             )
-            request_row_id = row["id"]
+            if row is not None:
+                request_row_id = row["id"]
+                created = True
+            else:
+                row = await conn.fetchrow(
+                    "SELECT id, judit_request_id, status FROM tenant_judit_requests WHERE tenant_id=$1 AND process_code=$2 FOR UPDATE",
+                    tenant_id,
+                    code,
+                )
+                request_row_id = row["id"]
+                created = False
+
             await _link_public_request(
                 conn,
                 public_summary_request_id=public_summary_request_id,
                 tenant_id=tenant_id,
                 code=code,
                 tenant_judit_request_id=request_row_id,
-                already_fetching=False,
+                already_fetching=bool(row["judit_request_id"]) if not created else False,
             )
-            await _enqueue_acquisition(conn, request_row_id=request_row_id, attempt=1)
-            return ProcessRequestResult(request_id="", created=True)
+            if created:
+                await _enqueue_acquisition(conn, request_row_id=request_row_id, attempt=1)
+            return ProcessRequestResult(
+                request_id=str(row["judit_request_id"] or "") if not created else "",
+                created=created,
+            )
 
 
 async def _reconcile_tenant_access(

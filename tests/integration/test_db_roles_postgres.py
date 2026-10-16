@@ -92,6 +92,12 @@ async def test_runtime_database_roles_are_least_privilege(monkeypatch: pytest.Mo
             "SELECT has_table_privilege('rpy_api', 'judit_trackings', 'SELECT,INSERT,UPDATE')"
         )
         assert await admin.fetchval(
+            "SELECT has_table_privilege('rpy_api', 'acquisition_authorizations', 'SELECT,INSERT,UPDATE')"
+        )
+        assert await admin.fetchval(
+            "SELECT has_table_privilege('rpy_api', 'tenant_judit_request_history', 'SELECT,INSERT')"
+        )
+        assert await admin.fetchval(
             "SELECT has_table_privilege('rpy_api', 'judit_tracking_refreshes', 'SELECT')"
         )
         assert not await admin.fetchval(

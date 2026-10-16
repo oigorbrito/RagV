@@ -26,6 +26,23 @@ class FrontendHandler(SimpleHTTPRequestHandler):
             self.send_response(204)
             self.end_headers()
             return
+        if self.path == "/capabilities":
+            payload = json.dumps(
+                {
+                    "authenticated": False,
+                    "default_source": "judit",
+                    "sources": {
+                        "judit": {"name": "Judit", "configured": True, "enabled": True, "experimental": False},
+                        "datajud": {"name": "DataJud", "configured": False, "enabled": False, "experimental": True},
+                    },
+                }
+            ).encode("utf-8")
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json; charset=utf-8")
+            self.send_header("Content-Length", str(len(payload)))
+            self.end_headers()
+            self.wfile.write(payload)
+            return
         super().do_GET()
 
     def end_headers(self) -> None:

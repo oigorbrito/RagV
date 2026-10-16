@@ -5,16 +5,18 @@ import hmac
 import json
 import os
 from contextlib import asynccontextmanager
+from typing import Any
 
 import asyncpg
 from fastapi import FastAPI, HTTPException, Request
 
 from app.api_key_middleware import ApiKeySecurityMiddleware
-from app.api_key_auth import authorization_header
+from app.api_key_auth import authorization_header, bearer_credential
 from app.api_v1 import router as api_v1_router
 from app.auth import configured_bearer_tokens, tenant_from_request
 from app.browser_origins import BrowserProcessCorsMiddleware
 from app.claim_evidence import claim_evidence_is_publishable, load_summary_claim_evidence
+from app.datajud_client import datajud_config, lookup_datajud_metadata
 from app.db import create_pool
 from app.frontend import router as frontend_router
 from app.http_auth_config import validate_http_auth_config
@@ -26,6 +28,15 @@ from app.observability import (
     collect_operational_metrics,
     list_failed_summaries,
     operational_thresholds,
+)
+from app.process_query_safety import (
+    AmbiguousFailureError,
+    AuthorizationAlreadyConsumedError,
+    AuthorizationExpiredError,
+    InvalidAuthorizationError,
+    RefreshRequiresConfirmationError,
+    classify_cnj_status,
+    create_authorization,
 )
 from app.process_requests import grant_request_tenants, request_process
 from app.processes import get_authorized_process, log_access, stage_version
@@ -127,6 +138,105 @@ async def ready(request: Request) -> dict[str, bool]:
     return {"ok": True}
 
 
+@app.get("/auth/verify")
+async def verify_auth(request: Request) -> dict[str, Any]:
+    tenant_id = tenant_from_request(request)
+    return {"ok": True, "authenticated": True, "tenant_id": str(tenant_id)}
+
+
+@app.get("/capabilities")
+async def get_capabilities(request: Request) -> dict[str, Any]:
+    authenticated = False
+    tenant_id = None
+    try:
+        if bearer_credential(request):
+            tid = tenant_from_request(request)
+            authenticated = True
+            tenant_id = str(tid)
+    except Exception:
+        authenticated = False
+        tenant_id = None
+
+    try:
+        dj = datajud_config()
+        dj_configured = bool(dj.api_key)
+        dj_enabled = dj.enabled and dj.authorized_use and bool(dj.api_key)
+        if not dj.enabled:
+            dj_reason = "DataJud desabilitado por padrão no servidor (DATAJUD_ENABLED=false)."
+        elif not dj.authorized_use:
+            dj_reason = "Uso de DataJud não autorizado explicitamente (DATAJUD_AUTHORIZED_USE=false)."
+        elif not dj.api_key:
+            dj_reason = "Chave de API do DataJud não configurada no servidor."
+        else:
+            dj_reason = None
+    except Exception as exc:
+        dj_configured = False
+        dj_enabled = False
+        dj_reason = f"Configuração do DataJud indisponível: {exc}"
+
+    return {
+        "authenticated": authenticated,
+        "tenant_id": tenant_id,
+        "default_source": "judit",
+        "sources": {
+            "judit": {
+                "name": "Judit",
+                "configured": True,
+                "enabled": True,
+                "experimental": False,
+                "description": "Fonte principal para busca completa de processos, peças, movimentações e resumos jurídicos.",
+                "operations": ["precheck", "request", "authorization", "read", "history"],
+            },
+            "datajud": {
+                "name": "DataJud",
+                "configured": dj_configured,
+                "enabled": dj_enabled,
+                "experimental": True,
+                "description": "Base pública do CNJ (metadados textuais). Não substitui a Judit; não realiza aquisição de peças nem resumos judiciais automatizados.",
+                "operations": ["metadata_lookup"] if dj_enabled else [],
+                "reason_unavailable": dj_reason,
+            },
+        },
+    }
+
+
+@app.get("/processes/{code}/datajud")
+async def get_datajud_metadata(code: str, request: Request) -> dict[str, Any]:
+    tenant_from_request(request)
+    try:
+        canonical_code = normalize_cnj(code)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="invalid process code") from None
+
+    dj = datajud_config()
+    if not (dj.enabled and dj.authorized_use and dj.api_key):
+        raise HTTPException(
+            status_code=403,
+            detail="DataJud integration is disabled, unauthorized, or missing API key on server",
+        )
+
+    result = await lookup_datajud_metadata(code=canonical_code, secrecy_level=0, config=dj)
+    if result.status == "not_found":
+        raise HTTPException(status_code=404, detail="process not found in DataJud")
+    if result.status != "ok" or result.metadata is None:
+        raise HTTPException(
+            status_code=502,
+            detail=f"DataJud lookup returned status: {result.status} ({result.error_code or 'no details'})",
+        )
+
+    md = result.metadata
+    return {
+        "code": canonical_code,
+        "source": "datajud",
+        "class_name": md.class_name,
+        "court": md.court,
+        "adjudicating_body": md.adjudicating_body,
+        "county": md.county,
+        "subjects": [s.description for s in md.subjects],
+        "parties": [{"name": p.name, "role": p.role, "side": p.side} for p in md.parties],
+    }
+
+
 @app.get("/ops/metrics")
 async def operational_metrics(request: Request) -> dict:
     if not _valid_ops_request(request):
@@ -145,6 +255,88 @@ async def failed_summaries(request: Request) -> dict:
         return {"failed_summaries": await list_failed_summaries(conn)}
 
 
+@app.get("/processes/{code}/status")
+@app.get("/processes/{code}/precheck")
+async def get_process_status(code: str, request: Request) -> dict:
+    tenant_id = tenant_from_request(request)
+    try:
+        canonical_code = normalize_cnj(code)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="invalid process code") from None
+
+    operation = request.query_params.get("operation")
+    async with request.app.state.pool.acquire() as conn:
+        status_result = await classify_cnj_status(
+            conn,
+            tenant_id=tenant_id,
+            code=canonical_code,
+            operation=operation,
+        )
+        process = await get_authorized_process(conn, tenant_id=tenant_id, code=canonical_code)
+        await log_access(
+            conn,
+            tenant_id=tenant_id,
+            process_id=process["id"] if process else None,
+            process_code=canonical_code,
+            action="precheck_process",
+            metadata={"classification": status_result.classification},
+        )
+    return status_result.to_dict()
+
+
+@app.post("/processes/{code}/authorizations", status_code=201)
+async def create_process_authorization(code: str, request: Request) -> dict:
+    tenant_id = tenant_from_request(request)
+    try:
+        canonical_code = normalize_cnj(code)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="invalid process code") from None
+
+    body_data: dict[str, Any] = {}
+    if request.headers.get("content-type", "").startswith("application/json"):
+        try:
+            body_bytes = await request.body()
+            if body_bytes:
+                parsed = loads_strict_json(body_bytes)
+                if isinstance(parsed, dict):
+                    body_data = parsed
+        except Exception:
+            body_data = {}
+
+    operation = str(body_data.get("operation", "refresh")).strip().lower()
+    source = str(body_data.get("source", "judit")).strip().lower()
+    if operation not in {"refresh", "acquisition"}:
+        raise HTTPException(status_code=400, detail="operation must be 'refresh' or 'acquisition'")
+    if source != "judit":
+        raise HTTPException(status_code=400, detail="source must be 'judit'")
+
+    async with request.app.state.pool.acquire() as conn:
+        auth = await create_authorization(
+            conn,
+            tenant_id=tenant_id,
+            code=canonical_code,
+            source=source,
+            operation=operation,
+        )
+        process = await get_authorized_process(conn, tenant_id=tenant_id, code=canonical_code)
+        await log_access(
+            conn,
+            tenant_id=tenant_id,
+            process_id=process["id"] if process else None,
+            process_code=canonical_code,
+            action="create_acquisition_authorization",
+            metadata={"authorization_id": str(auth.id), "operation": operation},
+        )
+    return {
+        "token": auth.token,
+        "code": canonical_code,
+        "source": auth.source,
+        "operation": auth.operation,
+        "expires_at": auth.expires_at.isoformat(),
+        "created_at": auth.created_at.isoformat(),
+    }
+
+
 @app.post("/processes/{code}/request", status_code=202)
 async def create_process_request(code: str, request: Request) -> dict:
     tenant_id = tenant_from_request(request)
@@ -152,12 +344,75 @@ async def create_process_request(code: str, request: Request) -> dict:
         canonical_code = normalize_cnj(code)
     except ValueError:
         raise HTTPException(status_code=400, detail="invalid process code") from None
+
+    body_data: dict[str, Any] = {}
+    if request.headers.get("content-type", "").startswith("application/json"):
+        try:
+            body_bytes = await request.body()
+            if body_bytes:
+                parsed = loads_strict_json(body_bytes)
+                if isinstance(parsed, dict):
+                    body_data = parsed
+        except Exception:
+            body_data = {}
+
+    auth_token = (
+        request.headers.get("X-Acquisition-Authorization")
+        or request.headers.get("X-Judit-Authorization-Token")
+        or request.headers.get("X-Confirmation-Token")
+        or body_data.get("authorization_token")
+        or body_data.get("confirmation_token")
+    )
+    if auth_token:
+        auth_token = str(auth_token).strip()
+
+    force_requested = (
+        request.query_params.get("force", "").lower() in {"true", "1"}
+        or body_data.get("force") is True
+        or body_data.get("refresh") is True
+    )
+    if force_requested and not auth_token:
+        raise HTTPException(
+            status_code=409,
+            detail="force=true is not sufficient authorization; explicit authorization token is required",
+        )
+
     try:
         result = await request_process(
-            request.app.state.pool, tenant_id=tenant_id, code=canonical_code
+            request.app.state.pool,
+            tenant_id=tenant_id,
+            code=canonical_code,
+            authorization_token=auth_token,
+            allow_refresh=force_requested,
         )
+    except AmbiguousFailureError as exc:
+        raise HTTPException(
+            status_code=409,
+            detail="acquisition blocked due to ambiguous provider failure",
+        ) from exc
+    except RefreshRequiresConfirmationError as exc:
+        raise HTTPException(
+            status_code=409,
+            detail="process already consulted; refresh requires explicit confirmation authorization",
+        ) from exc
+    except AuthorizationAlreadyConsumedError as exc:
+        raise HTTPException(
+            status_code=409,
+            detail="authorization token has already been consumed",
+        ) from exc
+    except AuthorizationExpiredError as exc:
+        raise HTTPException(
+            status_code=400,
+            detail="authorization token has expired",
+        ) from exc
+    except InvalidAuthorizationError as exc:
+        raise HTTPException(
+            status_code=400,
+            detail=str(exc),
+        ) from exc
     except JuditRequestError:
         raise HTTPException(status_code=503, detail="process provider unavailable") from None
+
     async with request.app.state.pool.acquire() as conn:
         process = await get_authorized_process(conn, tenant_id=tenant_id, code=canonical_code)
         await log_access(
@@ -166,13 +421,117 @@ async def create_process_request(code: str, request: Request) -> dict:
             process_id=process["id"] if process else None,
             process_code=canonical_code,
             action="request_process",
-            metadata={"created": result.created},
+            metadata={"created": result.created, "authorized": bool(auth_token)},
         )
     return {
         "code": canonical_code,
-        "status": "available" if process else "processing",
+        "status": "available" if (process and not result.created) else "processing",
         "created": result.created,
     }
+
+
+@app.get("/processes")
+async def list_processes(
+    request: Request,
+    limit: int = 20,
+    offset: int = 0,
+) -> dict[str, Any]:
+    tenant_id = tenant_from_request(request)
+    limit = max(1, min(limit, 100))
+    offset = max(0, offset)
+
+    pool: asyncpg.Pool = request.app.state.pool
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            """
+            WITH combined AS (
+                SELECT
+                    p.code,
+                    p.court,
+                    p.class_name,
+                    p.updated_at,
+                    r.status AS acquisition_status,
+                    r.created_at AS requested_at,
+                    r.completed_at AS last_acquisition_at,
+                    COALESCE(r.completed_at, r.created_at, p.updated_at) AS sort_time
+                FROM tenant_processes tp
+                JOIN processes p ON p.id = tp.process_id
+                LEFT JOIN tenant_judit_requests r ON r.tenant_id = tp.tenant_id AND r.process_code = p.code
+                WHERE tp.tenant_id = $1
+
+                UNION
+
+                SELECT
+                    r.process_code AS code,
+                    NULL AS court,
+                    NULL AS class_name,
+                    r.created_at AS updated_at,
+                    r.status AS acquisition_status,
+                    r.created_at AS requested_at,
+                    r.completed_at AS last_acquisition_at,
+                    r.created_at AS sort_time
+                FROM tenant_judit_requests r
+                LEFT JOIN processes p ON p.code = r.process_code
+                LEFT JOIN tenant_processes tp ON tp.process_id = p.id AND tp.tenant_id = r.tenant_id
+                WHERE r.tenant_id = $1 AND tp.process_id IS NULL
+            )
+            SELECT code, court, class_name, updated_at, acquisition_status, requested_at, last_acquisition_at
+            FROM combined
+            ORDER BY sort_time DESC, code ASC
+            LIMIT $2 OFFSET $3
+            """,
+            tenant_id,
+            limit,
+            offset,
+        )
+
+        total = await conn.fetchval(
+            """
+            WITH combined AS (
+                SELECT p.code
+                FROM tenant_processes tp
+                JOIN processes p ON p.id = tp.process_id
+                WHERE tp.tenant_id = $1
+
+                UNION
+
+                SELECT r.process_code AS code
+                FROM tenant_judit_requests r
+                WHERE r.tenant_id = $1
+            )
+            SELECT COUNT(*) FROM combined
+            """,
+            tenant_id,
+        )
+
+        await log_access(
+            conn,
+            tenant_id=tenant_id,
+            process_id=None,
+            process_code="*",
+            action="list_processes",
+            metadata={"limit": limit, "offset": offset},
+        )
+
+        items = [
+            {
+                "code": r["code"],
+                "court": r["court"] or "Não informado",
+                "class_name": r["class_name"] or "Não informada",
+                "updated_at": r["updated_at"].isoformat() if r["updated_at"] else None,
+                "acquisition_status": r["acquisition_status"] or "completed",
+                "requested_at": r["requested_at"].isoformat() if r["requested_at"] else None,
+                "last_acquisition_at": r["last_acquisition_at"].isoformat() if r["last_acquisition_at"] else None,
+            }
+            for r in rows
+        ]
+
+        return {
+            "items": items,
+            "total": total or 0,
+            "limit": limit,
+            "offset": offset,
+        }
 
 
 @app.get("/processes/{code}")
