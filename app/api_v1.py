@@ -20,6 +20,7 @@ from app.auth import principal_from_request, principal_from_request_unscoped, te
 from app.claim_evidence import claim_evidence_is_publishable, load_summary_claim_evidence
 from app.judit import normalize_cnj
 from app.json_utils import decode_json_object, loads_strict_json
+from app.process_query_safety import classify_cnj_status, create_authorization
 from app.process_requests import request_process
 from app.processes import get_authorized_process, log_access
 from app.provenance import load_used_summary_sources
@@ -525,11 +526,20 @@ async def create_summary_job(request: Request):
         ) from None
 
     if created or public_request.tenant_judit_request_id is None:
+        auth_token = (
+            request.headers.get("X-Acquisition-Authorization")
+            or request.headers.get("X-Confirmation-Token")
+            or body.get("authorization_token")
+            or body.get("confirmation_token")
+        )
+        if auth_token:
+            auth_token = str(auth_token).strip()
         await request_process(
             pool,
             tenant_id=principal.tenant_id,
             code=code,
             public_summary_request_id=public_request.id,
+            authorization_token=auth_token,
         )
 
     async with pool.acquire() as conn:
@@ -700,3 +710,91 @@ async def get_summary_sources(code: str, request: Request):
             "claim_evidence": claim_evidence,
             "flags": flags,
         }
+
+
+@router.get("/v1/processos/{code}/status")
+@router.get("/v1/processos/{code}/precheck")
+async def get_processo_status_v1(code: str, request: Request) -> dict:
+    try:
+        canonical_code = normalize_cnj(code)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="invalid process code") from None
+
+    principal = await principal_from_request_unscoped(request)
+    operation = request.query_params.get("operation")
+    pool: asyncpg.Pool = request.app.state.pool
+    async with pool.acquire() as conn:
+        status_result = await classify_cnj_status(
+            conn,
+            tenant_id=principal.tenant_id,
+            code=canonical_code,
+            operation=operation,
+        )
+        process = await get_authorized_process(
+            conn, tenant_id=principal.tenant_id, code=canonical_code
+        )
+        await log_access(
+            conn,
+            tenant_id=principal.tenant_id,
+            process_id=process["id"] if process else None,
+            process_code=canonical_code,
+            action="v1_precheck_process",
+            metadata={"classification": status_result.classification},
+        )
+    return status_result.to_dict()
+
+
+@router.post("/v1/processos/{code}/authorizations", status_code=201)
+async def create_processo_authorization_v1(code: str, request: Request) -> dict:
+    try:
+        canonical_code = normalize_cnj(code)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="invalid process code") from None
+
+    principal = await principal_from_request_unscoped(request)
+    body_data: dict[str, Any] = {}
+    if request.headers.get("content-type", "").startswith("application/json"):
+        try:
+            body_bytes = await request.body()
+            if body_bytes:
+                parsed = loads_strict_json(body_bytes)
+                if isinstance(parsed, dict):
+                    body_data = parsed
+        except Exception:
+            body_data = {}
+
+    operation = str(body_data.get("operation", "refresh")).strip().lower()
+    source = str(body_data.get("source", "judit")).strip().lower()
+    if operation not in {"refresh", "acquisition"}:
+        raise HTTPException(status_code=400, detail="operation must be 'refresh' or 'acquisition'")
+    if source != "judit":
+        raise HTTPException(status_code=400, detail="source must be 'judit'")
+
+    pool: asyncpg.Pool = request.app.state.pool
+    async with pool.acquire() as conn:
+        auth = await create_authorization(
+            conn,
+            tenant_id=principal.tenant_id,
+            code=canonical_code,
+            source=source,
+            operation=operation,
+        )
+        process = await get_authorized_process(
+            conn, tenant_id=principal.tenant_id, code=canonical_code
+        )
+        await log_access(
+            conn,
+            tenant_id=principal.tenant_id,
+            process_id=process["id"] if process else None,
+            process_code=canonical_code,
+            action="v1_create_acquisition_authorization",
+            metadata={"authorization_id": str(auth.id), "operation": operation},
+        )
+    return {
+        "token": auth.token,
+        "code": canonical_code,
+        "source": auth.source,
+        "operation": auth.operation,
+        "expires_at": auth.expires_at.isoformat(),
+        "created_at": auth.created_at.isoformat(),
+    }

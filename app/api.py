@@ -5,6 +5,7 @@ import hmac
 import json
 import os
 from contextlib import asynccontextmanager
+from typing import Any
 
 import asyncpg
 from fastapi import FastAPI, HTTPException, Request
@@ -26,6 +27,15 @@ from app.observability import (
     collect_operational_metrics,
     list_failed_summaries,
     operational_thresholds,
+)
+from app.process_query_safety import (
+    AmbiguousFailureError,
+    AuthorizationAlreadyConsumedError,
+    AuthorizationExpiredError,
+    InvalidAuthorizationError,
+    RefreshRequiresConfirmationError,
+    classify_cnj_status,
+    create_authorization,
 )
 from app.process_requests import grant_request_tenants, request_process
 from app.processes import get_authorized_process, log_access, stage_version
@@ -145,6 +155,88 @@ async def failed_summaries(request: Request) -> dict:
         return {"failed_summaries": await list_failed_summaries(conn)}
 
 
+@app.get("/processes/{code}/status")
+@app.get("/processes/{code}/precheck")
+async def get_process_status(code: str, request: Request) -> dict:
+    tenant_id = tenant_from_request(request)
+    try:
+        canonical_code = normalize_cnj(code)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="invalid process code") from None
+
+    operation = request.query_params.get("operation")
+    async with request.app.state.pool.acquire() as conn:
+        status_result = await classify_cnj_status(
+            conn,
+            tenant_id=tenant_id,
+            code=canonical_code,
+            operation=operation,
+        )
+        process = await get_authorized_process(conn, tenant_id=tenant_id, code=canonical_code)
+        await log_access(
+            conn,
+            tenant_id=tenant_id,
+            process_id=process["id"] if process else None,
+            process_code=canonical_code,
+            action="precheck_process",
+            metadata={"classification": status_result.classification},
+        )
+    return status_result.to_dict()
+
+
+@app.post("/processes/{code}/authorizations", status_code=201)
+async def create_process_authorization(code: str, request: Request) -> dict:
+    tenant_id = tenant_from_request(request)
+    try:
+        canonical_code = normalize_cnj(code)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="invalid process code") from None
+
+    body_data: dict[str, Any] = {}
+    if request.headers.get("content-type", "").startswith("application/json"):
+        try:
+            body_bytes = await request.body()
+            if body_bytes:
+                parsed = loads_strict_json(body_bytes)
+                if isinstance(parsed, dict):
+                    body_data = parsed
+        except Exception:
+            body_data = {}
+
+    operation = str(body_data.get("operation", "refresh")).strip().lower()
+    source = str(body_data.get("source", "judit")).strip().lower()
+    if operation not in {"refresh", "acquisition"}:
+        raise HTTPException(status_code=400, detail="operation must be 'refresh' or 'acquisition'")
+    if source != "judit":
+        raise HTTPException(status_code=400, detail="source must be 'judit'")
+
+    async with request.app.state.pool.acquire() as conn:
+        auth = await create_authorization(
+            conn,
+            tenant_id=tenant_id,
+            code=canonical_code,
+            source=source,
+            operation=operation,
+        )
+        process = await get_authorized_process(conn, tenant_id=tenant_id, code=canonical_code)
+        await log_access(
+            conn,
+            tenant_id=tenant_id,
+            process_id=process["id"] if process else None,
+            process_code=canonical_code,
+            action="create_acquisition_authorization",
+            metadata={"authorization_id": str(auth.id), "operation": operation},
+        )
+    return {
+        "token": auth.token,
+        "code": canonical_code,
+        "source": auth.source,
+        "operation": auth.operation,
+        "expires_at": auth.expires_at.isoformat(),
+        "created_at": auth.created_at.isoformat(),
+    }
+
+
 @app.post("/processes/{code}/request", status_code=202)
 async def create_process_request(code: str, request: Request) -> dict:
     tenant_id = tenant_from_request(request)
@@ -152,12 +244,74 @@ async def create_process_request(code: str, request: Request) -> dict:
         canonical_code = normalize_cnj(code)
     except ValueError:
         raise HTTPException(status_code=400, detail="invalid process code") from None
+
+    body_data: dict[str, Any] = {}
+    if request.headers.get("content-type", "").startswith("application/json"):
+        try:
+            body_bytes = await request.body()
+            if body_bytes:
+                parsed = loads_strict_json(body_bytes)
+                if isinstance(parsed, dict):
+                    body_data = parsed
+        except Exception:
+            body_data = {}
+
+    auth_token = (
+        request.headers.get("X-Acquisition-Authorization")
+        or request.headers.get("X-Confirmation-Token")
+        or body_data.get("authorization_token")
+        or body_data.get("confirmation_token")
+    )
+    if auth_token:
+        auth_token = str(auth_token).strip()
+
+    force_requested = (
+        request.query_params.get("force", "").lower() in {"true", "1"}
+        or body_data.get("force") is True
+        or body_data.get("refresh") is True
+    )
+    if force_requested and not auth_token:
+        raise HTTPException(
+            status_code=409,
+            detail="force=true is not sufficient authorization; explicit authorization token is required",
+        )
+
     try:
         result = await request_process(
-            request.app.state.pool, tenant_id=tenant_id, code=canonical_code
+            request.app.state.pool,
+            tenant_id=tenant_id,
+            code=canonical_code,
+            authorization_token=auth_token,
+            allow_refresh=force_requested,
         )
+    except AmbiguousFailureError as exc:
+        raise HTTPException(
+            status_code=409,
+            detail="acquisition blocked due to ambiguous provider failure",
+        ) from exc
+    except RefreshRequiresConfirmationError as exc:
+        raise HTTPException(
+            status_code=409,
+            detail="process already consulted; refresh requires explicit confirmation authorization",
+        ) from exc
+    except AuthorizationAlreadyConsumedError as exc:
+        raise HTTPException(
+            status_code=409,
+            detail="authorization token has already been consumed",
+        ) from exc
+    except AuthorizationExpiredError as exc:
+        raise HTTPException(
+            status_code=400,
+            detail="authorization token has expired",
+        ) from exc
+    except InvalidAuthorizationError as exc:
+        raise HTTPException(
+            status_code=400,
+            detail=str(exc),
+        ) from exc
     except JuditRequestError:
         raise HTTPException(status_code=503, detail="process provider unavailable") from None
+
     async with request.app.state.pool.acquire() as conn:
         process = await get_authorized_process(conn, tenant_id=tenant_id, code=canonical_code)
         await log_access(
@@ -166,11 +320,11 @@ async def create_process_request(code: str, request: Request) -> dict:
             process_id=process["id"] if process else None,
             process_code=canonical_code,
             action="request_process",
-            metadata={"created": result.created},
+            metadata={"created": result.created, "authorized": bool(auth_token)},
         )
     return {
         "code": canonical_code,
-        "status": "available" if process else "processing",
+        "status": "available" if (process and not result.created) else "processing",
         "created": result.created,
     }
 
