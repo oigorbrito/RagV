@@ -64,6 +64,19 @@ class DesktopLauncherTests(unittest.TestCase):
         self.assertEqual(args[0], "RagV Desktop")
         self.assertEqual(args[1], desktop.URL)
 
+    @patch.object(desktop, "api_ready", return_value=True)
+    def test_main_custom_url_from_env(self, _ready):
+        fake_webview = MagicMock()
+
+        with patch.dict(sys.modules, {"webview": fake_webview}), patch.dict(
+            "os.environ", {"RPY_DESKTOP_URL": "http://127.0.0.1:8008"}
+        ):
+            result = desktop.main()
+
+        self.assertEqual(result, 0)
+        args, _ = fake_webview.create_window.call_args
+        self.assertEqual(args[1], "http://127.0.0.1:8008")
+
     def test_show_error_native_dialog(self):
         mock_msgbox = MagicMock()
         fake_windll = MagicMock()
