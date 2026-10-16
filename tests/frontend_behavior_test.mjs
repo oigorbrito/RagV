@@ -15,6 +15,10 @@ const ids = [
   "result-court","result-updated","result-context","parties-list","subjects-list",
   "header-data","movements-list","summary-body","summary-provenance","summary-eyebrow",
   "summary-title","case-data-title","movements-title",
+  "history-trigger","history-panel","history-title","refresh-history","close-history",
+  "history-status","history-list","open-existing-history","request-refresh",
+  "confirm-modal","confirm-modal-title","confirm-modal-desc","confirm-refresh-submit",
+  "confirm-refresh-cancel","refresh-from-result",
 ];
 
 class ClassList {
@@ -37,7 +41,7 @@ class ClassList {
 class Element {
   constructor(id) {
     this.id = id;
-    this.hidden = false;
+    this.hidden = ["history-panel", "confirm-modal"].includes(id);
     this.disabled = false;
     this.value = "";
     this.textContent = "";
@@ -206,6 +210,7 @@ function createHarness(fetchResponses, { apiBase = "same-origin" } = {}) {
     },
     async click(id) {
       assert.equal(typeof elements[id].listeners.click, "function", `${id} has no click listener`);
+      if (elements[id].disabled) return;
       await elements[id].listeners.click();
     },
     async clickNavLink(index) {
@@ -230,13 +235,13 @@ async function scenario(name, body) {
 
 await scenario("configured Pages API base uses the backend origin", async () => {
   const ui = createHarness(
-    [jsonResponse(200, readyPayload())],
+    [jsonResponse(200, { classification: "read_existing", process_exists: true })],
     { apiBase: "https://api-staging.rpy.test" },
   );
   await ui.search();
   assert.equal(
     ui.requests[0].url,
-    `https://api-staging.rpy.test/processes/${encodeURIComponent(VALID_CODE)}`,
+    `https://api-staging.rpy.test/processes/${encodeURIComponent(VALID_CODE)}/status`,
   );
 });
 
@@ -248,15 +253,25 @@ await scenario("unconfigured Pages API fails closed without network I/O", async 
 });
 
 await scenario("successful lookup renders public data, focuses result and uses bearer header", async () => {
-  const ui = createHarness([jsonResponse(200, readyPayload())]);
+  const ui = createHarness([
+    jsonResponse(200, { classification: "read_existing", process_exists: true }),
+    jsonResponse(200, readyPayload()),
+  ]);
 
   await ui.search();
 
   assert.equal(ui.requests.length, 1);
-  assert.equal(ui.requests[0].url, `/processes/${encodeURIComponent(VALID_CODE)}`);
+  assert.equal(ui.requests[0].url, `/processes/${encodeURIComponent(VALID_CODE)}/status`);
   assert.equal(ui.requests[0].options.headers.Authorization, `Bearer ${TOKEN}`);
   assert.equal(ui.requests[0].options.headers.Accept, "application/json");
-  assert.doesNotMatch(ui.requests[0].url, /test-token/);
+
+  await ui.click("open-existing-history");
+
+  assert.equal(ui.requests.length, 2);
+  assert.equal(ui.requests[1].url, `/processes/${encodeURIComponent(VALID_CODE)}`);
+  assert.equal(ui.requests[1].options.headers.Authorization, `Bearer ${TOKEN}`);
+  assert.equal(ui.requests[1].options.headers.Accept, "application/json");
+  assert.doesNotMatch(ui.requests[1].url, /test-token/);
   assert.ok(ui.elements["summary-body"].renderedText.includes("Resumo pronto"));
   assert.equal(ui.elements["summary-eyebrow"].textContent, "SÍNTESE GERADA POR IA");
   assert.ok(ui.elements["summary-provenance"].textContent.includes("gerado por IA"));
@@ -266,9 +281,9 @@ await scenario("successful lookup renders public data, focuses result and uses b
   assert.equal(ui.elements["result"].scrolled, true);
 });
 
-
 await scenario("provider-free demo summary is labeled as synthetic instead of AI-generated", async () => {
   const ui = createHarness([
+    jsonResponse(200, { classification: "read_existing", process_exists: true }),
     jsonResponse(200, readyPayload({
       summary: {
         markdown: "Resumo pronto",
@@ -279,6 +294,7 @@ await scenario("provider-free demo summary is labeled as synthetic instead of AI
   ]);
 
   await ui.search();
+  await ui.click("open-existing-history");
 
   assert.equal(ui.elements["summary-eyebrow"].textContent, "SÍNTESE DE DEMONSTRAÇÃO");
   assert.ok(ui.elements["summary-provenance"].textContent.includes("Resumo sintético local"));
@@ -289,11 +305,13 @@ await scenario("provider-free demo summary is labeled as synthetic instead of AI
 await scenario("processing summary remains readable and transitions to published summary", async () => {
   const processing = readyPayload({ summary_status: "processing", summary: null });
   const ui = createHarness([
+    jsonResponse(200, { classification: "read_existing", process_exists: true }),
     jsonResponse(200, processing),
     jsonResponse(200, readyPayload()),
   ]);
 
   await ui.search();
+  await ui.click("open-existing-history");
 
   assert.ok(ui.elements["summary-body"].renderedText.includes("sendo preparado"));
   assert.equal(ui.elements["summary-eyebrow"].hidden, true);
@@ -309,11 +327,13 @@ await scenario("processing summary remains readable and transitions to published
 
 await scenario("a new lookup clears stale result before a 404 outcome", async () => {
   const ui = createHarness([
+    jsonResponse(200, { classification: "read_existing", process_exists: true }),
     jsonResponse(200, readyPayload()),
     jsonResponse(404, { detail: "not found" }),
   ]);
 
   await ui.search();
+  await ui.click("open-existing-history");
   assert.equal(ui.elements["result"].hidden, false);
 
   await ui.search({ code: "0000000-00.2026.8.21.0002" });
@@ -413,6 +433,7 @@ await scenario("allowlisted JSX renders as inert DOM and unsupported markup stay
     '<img src=x onerror=alert(1)>',
   ].join("\n");
   const ui = createHarness([
+    jsonResponse(200, { classification: "read_existing", process_exists: true }),
     jsonResponse(200, readyPayload({
       code: "0000000-00.2026.8.21.0010",
       summary: { markdown },
@@ -422,6 +443,7 @@ await scenario("allowlisted JSX renders as inert DOM and unsupported markup stay
   ]);
 
   await ui.search({ code: "0000000-00.2026.8.21.0010" });
+  await ui.click("open-existing-history");
 
   const text = ui.elements["summary-body"].renderedText;
   assert.ok(text.includes("Maria da Silva"));
@@ -437,9 +459,15 @@ await scenario("allowlisted JSX renders as inert DOM and unsupported markup stay
 
 await scenario("new search and pagehide cancel polling without erasing the in-memory credential", async () => {
   const processing = readyPayload({ summary_status: "processing", summary: null });
-  const ui = createHarness([jsonResponse(200, processing)]);
+  const ui = createHarness([
+    jsonResponse(200, { classification: "read_existing", process_exists: true }),
+    jsonResponse(200, processing),
+    jsonResponse(200, { classification: "read_existing", process_exists: true }),
+    jsonResponse(200, processing),
+  ]);
 
   await ui.search();
+  await ui.click("open-existing-history");
   assert.equal(ui.hasTimer(), true);
 
   await ui.click("new-search");
@@ -449,6 +477,7 @@ await scenario("new search and pagehide cancel polling without erasing the in-me
   assert.equal(ui.elements["bearer-token"].value, TOKEN);
 
   await ui.search();
+  await ui.click("open-existing-history");
   assert.equal(ui.hasTimer(), true);
   ui.pagehide();
   assert.equal(ui.hasTimer(), false);
@@ -473,7 +502,9 @@ await scenario("credential toggle updates accessible label and markup includes f
 });
 
 await scenario("bearer token field submits search on Enter", async () => {
-  const ui = createHarness([jsonResponse(200, readyPayload())]);
+  const ui = createHarness([
+    jsonResponse(200, { classification: "read_existing", process_exists: true }),
+  ]);
   ui.elements["process-code"].value = VALID_CODE;
   ui.elements["bearer-token"].value = TOKEN;
 
@@ -484,19 +515,27 @@ await scenario("bearer token field submits search on Enter", async () => {
 
   assert.equal(prevented, true);
   assert.equal(ui.requests.length, 1);
-  assert.equal(ui.requests[0].url, `/processes/${encodeURIComponent(VALID_CODE)}`);
+  assert.equal(ui.requests[0].url, `/processes/${encodeURIComponent(VALID_CODE)}/status`);
 });
 
 await scenario("section navigation links shift focus to target headings", async () => {
-  const ui = createHarness([jsonResponse(200, readyPayload())]);
+  const ui = createHarness([
+    jsonResponse(200, { classification: "read_existing", process_exists: true }),
+    jsonResponse(200, readyPayload()),
+  ]);
   await ui.search();
+  await ui.click("open-existing-history");
   await ui.clickNavLink(1);
   assert.equal(ui.elements["case-data-title"].focused, true);
 });
 
 await scenario("copy button resets label cleanly on rapid repeated clicks", async () => {
-  const ui = createHarness([jsonResponse(200, readyPayload())]);
+  const ui = createHarness([
+    jsonResponse(200, { classification: "read_existing", process_exists: true }),
+    jsonResponse(200, readyPayload()),
+  ]);
   await ui.search();
+  await ui.click("open-existing-history");
 
   await ui.click("copy-summary");
   assert.equal(ui.elements["copy-summary"].textContent, "Resumo copiado");
@@ -508,4 +547,291 @@ await scenario("copy button resets label cleanly on rapid repeated clicks", asyn
   assert.equal(ui.elements["copy-summary"].textContent, "Copiar resumo");
 });
 
+// Bloco 153 - Novas verificações comportamentais obrigatórias
+
+await scenario("consulta com histórico existente exibe aviso e opções sem iniciar nova aquisição", async () => {
+  const ui = createHarness([
+    jsonResponse(200, {
+      code: VALID_CODE,
+      classification: "read_existing",
+      process_exists: true,
+      acquisition_status: "completed",
+      last_acquisition_at: "2026-09-18T10:00:00Z",
+      acquired_today: false,
+    }),
+  ]);
+  await ui.search();
+  assert.equal(ui.requests.length, 1);
+  assert.equal(ui.requests[0].url, `/processes/${encodeURIComponent(VALID_CODE)}/status`);
+  assert.ok(ui.elements["status-title"].textContent.includes("Processo já consultado"));
+  assert.equal(ui.elements["open-existing-history"].hidden, false);
+  assert.equal(ui.elements["request-refresh"].hidden, false);
+  assert.equal(ui.elements["request-process"].hidden, true);
+});
+
+await scenario("abertura do histórico exibe dados armazenados sem chamar a Judit", async () => {
+  const ui = createHarness([
+    jsonResponse(200, {
+      code: VALID_CODE,
+      classification: "read_existing",
+      process_exists: true,
+      last_acquisition_at: "2026-09-18T10:00:00Z",
+    }),
+    jsonResponse(200, readyPayload()),
+  ]);
+  await ui.search();
+  await ui.click("open-existing-history");
+  assert.equal(ui.requests.length, 2);
+  assert.equal(ui.requests[1].url, `/processes/${encodeURIComponent(VALID_CODE)}`);
+  assert.equal(ui.requests[1].options.method, undefined);
+  assert.equal(ui.elements["result"].hidden, false);
+  assert.ok(ui.elements["summary-body"].renderedText.includes("Resumo pronto"));
+});
+
+await scenario("CNJ ainda não adquirido permite primeira aquisição pelo fluxo normal", async () => {
+  const ui = createHarness([
+    jsonResponse(200, {
+      code: VALID_CODE,
+      classification: "acquisition_required",
+      process_exists: false,
+    }),
+    jsonResponse(202, { status: "pending", created: true }),
+  ]);
+  await ui.search();
+  assert.equal(ui.elements["request-process"].hidden, false);
+  assert.equal(ui.elements["open-existing-history"].hidden, true);
+  assert.equal(ui.elements["request-refresh"].hidden, true);
+
+  await ui.click("request-process");
+  assert.equal(ui.requests.length, 2);
+  assert.equal(ui.requests[1].url, `/processes/${encodeURIComponent(VALID_CODE)}/request`);
+  assert.equal(ui.requests[1].options.method, "POST");
+  assert.equal(ui.requests[1].options.headers["X-Judit-Authorization-Token"], undefined);
+  assert.equal(ui.hasTimer(), true);
+});
+
+await scenario("aquisição em andamento identifica estado e inicia acompanhamento", async () => {
+  const ui = createHarness([
+    jsonResponse(200, {
+      code: VALID_CODE,
+      classification: "acquisition_pending",
+      process_exists: false,
+      acquisition_status: "processing",
+    }),
+  ]);
+  await ui.search();
+  assert.ok(ui.elements["status-title"].textContent.includes("em andamento"));
+  assert.equal(ui.hasTimer(), true);
+});
+
+await scenario("falha ambígua impede repetição automática e apresenta aviso apropriado", async () => {
+  const ui = createHarness([
+    jsonResponse(200, {
+      code: VALID_CODE,
+      classification: "ambiguous_failure",
+      process_exists: false,
+      acquisition_status: "failed_ambiguous",
+    }),
+  ]);
+  await ui.search();
+  assert.ok(ui.elements["status-title"].textContent.includes("incerto"));
+  assert.equal(ui.elements["request-process"].hidden, true);
+  assert.equal(ui.elements["request-refresh"].hidden, true);
+  assert.equal(ui.elements["open-existing-history"].hidden, true);
+  assert.equal(ui.hasTimer(), false);
+});
+
+await scenario("confirmação cancelada fecha o modal sem gerar autorização ou chamada Judit", async () => {
+  const ui = createHarness([
+    jsonResponse(200, {
+      code: VALID_CODE,
+      classification: "read_existing",
+      process_exists: true,
+    }),
+  ]);
+  await ui.search();
+  await ui.click("request-refresh");
+  assert.equal(ui.elements["confirm-modal"].hidden, false);
+
+  await ui.click("confirm-refresh-cancel");
+  assert.equal(ui.elements["confirm-modal"].hidden, true);
+  assert.equal(ui.requests.length, 1);
+});
+
+await scenario("confirmação aceita gera autorização e executa aquisição com token", async () => {
+  const ui = createHarness([
+    jsonResponse(200, {
+      code: VALID_CODE,
+      classification: "read_existing",
+      process_exists: true,
+    }),
+    jsonResponse(201, {
+      authorization_token: "auth-single-use-token-abc",
+      expires_at: "2026-10-15T22:30:00Z",
+    }),
+    jsonResponse(202, { status: "pending", created: true }),
+  ]);
+  await ui.search();
+  await ui.click("request-refresh");
+  assert.equal(ui.elements["confirm-modal"].hidden, false);
+
+  await ui.click("confirm-refresh-submit");
+  assert.equal(ui.elements["confirm-modal"].hidden, true);
+
+  assert.equal(ui.requests.length, 3);
+  assert.equal(ui.requests[1].url, `/processes/${encodeURIComponent(VALID_CODE)}/authorizations`);
+  assert.equal(ui.requests[1].options.method, "POST");
+
+  assert.equal(ui.requests[2].url, `/processes/${encodeURIComponent(VALID_CODE)}/request`);
+  assert.equal(ui.requests[2].options.method, "POST");
+  assert.equal(
+    ui.requests[2].options.headers["X-Judit-Authorization-Token"],
+    "auth-single-use-token-abc",
+  );
+  assert.equal(ui.hasTimer(), true);
+});
+
+await scenario("token expirado ou consumido interrompe e informa o usuário", async () => {
+  const ui = createHarness([
+    jsonResponse(200, {
+      code: VALID_CODE,
+      classification: "read_existing",
+      process_exists: true,
+    }),
+    jsonResponse(201, {
+      authorization_token: "expired-token",
+    }),
+    jsonResponse(409, {
+      detail: "token de autorização expirado ou já consumido",
+    }),
+  ]);
+  await ui.search();
+  await ui.click("request-refresh");
+  await ui.click("confirm-refresh-submit");
+
+  assert.equal(ui.hasTimer(), false);
+  assert.ok(ui.elements["status-title"].textContent.includes("não autorizada ou expirada"));
+  assert.equal(ui.elements["confirm-refresh-submit"].disabled, false);
+});
+
+await scenario("duplo clique bloqueia múltiplos disparos enquanto aguarda resposta", async () => {
+  let resolveAuth;
+  const slowAuthPromise = new Promise(resolve => {
+    resolveAuth = resolve;
+  });
+
+  const ui = createHarness([
+    jsonResponse(200, {
+      code: VALID_CODE,
+      classification: "read_existing",
+      process_exists: true,
+    }),
+    {
+      ok: true,
+      status: 201,
+      json: async () => {
+        await slowAuthPromise;
+        return { authorization_token: "auth-123" };
+      },
+    },
+    jsonResponse(202, { status: "pending", created: true }),
+  ]);
+
+  await ui.search();
+  await ui.click("request-refresh");
+
+  const clickPromise1 = ui.click("confirm-refresh-submit");
+  assert.equal(ui.elements["confirm-refresh-submit"].disabled, true);
+
+  const clickPromise2 = ui.click("confirm-refresh-submit");
+  resolveAuth();
+  await Promise.all([clickPromise1, clickPromise2]);
+
+  assert.equal(ui.requests.length, 3);
+});
+
+await scenario("resposta obsoleta digitação rápida ou nova consulta descarta retorno anterior", async () => {
+  let resolveStatus1;
+  const statusPromise1 = new Promise(resolve => {
+    resolveStatus1 = resolve;
+  });
+
+  const CODE_1 = "0000000-00.2026.8.21.0001";
+  const CODE_2 = "0000000-00.2026.8.21.0002";
+
+  const ui = createHarness([
+    {
+      ok: true,
+      status: 200,
+      json: async () => {
+        await statusPromise1;
+        return { code: CODE_1, classification: "read_existing", process_exists: true };
+      },
+    },
+    jsonResponse(200, { code: CODE_2, classification: "acquisition_required", process_exists: false }),
+  ]);
+
+  const search1 = ui.search({ code: CODE_1 });
+  const search2 = ui.search({ code: CODE_2 });
+
+  await search2;
+  assert.equal(ui.elements["request-process"].hidden, false);
+
+  resolveStatus1();
+  await search1;
+
+  assert.equal(ui.elements["request-process"].hidden, false);
+  assert.equal(ui.elements["open-existing-history"].hidden, true);
+});
+
+await scenario("listagem de histórico exibe processos do tenant e permite abrir um item", async () => {
+  const ui = createHarness([
+    jsonResponse(200, {
+      items: [
+        {
+          code: VALID_CODE,
+          court: "TJRS",
+          class_name: "Procedimento Comum",
+          updated_at: "2026-09-18T12:00:00Z",
+          acquisition_status: "completed",
+        },
+      ],
+      total: 1,
+    }),
+    jsonResponse(200, readyPayload()),
+  ]);
+
+  ui.elements["bearer-token"].value = TOKEN;
+  await ui.click("history-trigger");
+
+  assert.equal(ui.elements["history-panel"].hidden, false);
+  assert.equal(ui.requests.length, 1);
+  assert.equal(ui.requests[0].url, "/processes?limit=50");
+  assert.equal(ui.elements["history-list"].children.length, 1);
+
+  const historyItem = ui.elements["history-list"].children[0];
+  await historyItem.listeners.click();
+
+  assert.equal(ui.elements["history-panel"].hidden, true);
+  assert.equal(ui.requests.length, 2);
+  assert.equal(ui.requests[1].url, `/processes/${encodeURIComponent(VALID_CODE)}`);
+  assert.equal(ui.elements["result"].hidden, false);
+});
+
+await scenario("consulta realizada no mesmo dia destaca aviso de consulta recente", async () => {
+  const ui = createHarness([
+    jsonResponse(200, {
+      code: VALID_CODE,
+      classification: "read_existing",
+      process_exists: true,
+      last_acquisition_at: "2026-10-15T15:00:00Z",
+      acquired_today: true,
+    }),
+  ]);
+  await ui.search();
+  assert.ok(ui.elements["status-detail"].textContent.includes("America/Sao_Paulo"));
+  assert.ok(ui.elements["status-detail"].textContent.includes("consultado hoje"));
+});
+
 console.log("frontend behavior harness: PASS");
+

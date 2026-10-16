@@ -258,6 +258,7 @@ async def create_process_request(code: str, request: Request) -> dict:
 
     auth_token = (
         request.headers.get("X-Acquisition-Authorization")
+        or request.headers.get("X-Judit-Authorization-Token")
         or request.headers.get("X-Confirmation-Token")
         or body_data.get("authorization_token")
         or body_data.get("confirmation_token")
@@ -327,6 +328,110 @@ async def create_process_request(code: str, request: Request) -> dict:
         "status": "available" if (process and not result.created) else "processing",
         "created": result.created,
     }
+
+
+@app.get("/processes")
+async def list_processes(
+    request: Request,
+    limit: int = 20,
+    offset: int = 0,
+) -> dict[str, Any]:
+    tenant_id = tenant_from_request(request)
+    limit = max(1, min(limit, 100))
+    offset = max(0, offset)
+
+    pool: asyncpg.Pool = request.app.state.pool
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            """
+            WITH combined AS (
+                SELECT
+                    p.code,
+                    p.court,
+                    p.class_name,
+                    p.updated_at,
+                    r.status AS acquisition_status,
+                    r.created_at AS requested_at,
+                    r.completed_at AS last_acquisition_at,
+                    COALESCE(r.completed_at, r.created_at, p.updated_at) AS sort_time
+                FROM tenant_processes tp
+                JOIN processes p ON p.id = tp.process_id
+                LEFT JOIN tenant_judit_requests r ON r.tenant_id = tp.tenant_id AND r.process_code = p.code
+                WHERE tp.tenant_id = $1
+
+                UNION
+
+                SELECT
+                    r.process_code AS code,
+                    NULL AS court,
+                    NULL AS class_name,
+                    r.created_at AS updated_at,
+                    r.status AS acquisition_status,
+                    r.created_at AS requested_at,
+                    r.completed_at AS last_acquisition_at,
+                    r.created_at AS sort_time
+                FROM tenant_judit_requests r
+                LEFT JOIN processes p ON p.code = r.process_code
+                LEFT JOIN tenant_processes tp ON tp.process_id = p.id AND tp.tenant_id = r.tenant_id
+                WHERE r.tenant_id = $1 AND tp.process_id IS NULL
+            )
+            SELECT code, court, class_name, updated_at, acquisition_status, requested_at, last_acquisition_at
+            FROM combined
+            ORDER BY sort_time DESC, code ASC
+            LIMIT $2 OFFSET $3
+            """,
+            tenant_id,
+            limit,
+            offset,
+        )
+
+        total = await conn.fetchval(
+            """
+            WITH combined AS (
+                SELECT p.code
+                FROM tenant_processes tp
+                JOIN processes p ON p.id = tp.process_id
+                WHERE tp.tenant_id = $1
+
+                UNION
+
+                SELECT r.process_code AS code
+                FROM tenant_judit_requests r
+                WHERE r.tenant_id = $1
+            )
+            SELECT COUNT(*) FROM combined
+            """,
+            tenant_id,
+        )
+
+        await log_access(
+            conn,
+            tenant_id=tenant_id,
+            process_id=None,
+            process_code="*",
+            action="list_processes",
+            metadata={"limit": limit, "offset": offset},
+        )
+
+        items = [
+            {
+                "code": r["code"],
+                "court": r["court"] or "Não informado",
+                "class_name": r["class_name"] or "Não informada",
+                "updated_at": r["updated_at"].isoformat() if r["updated_at"] else None,
+                "acquisition_status": r["acquisition_status"] or "completed",
+                "requested_at": r["requested_at"].isoformat() if r["requested_at"] else None,
+                "last_acquisition_at": r["last_acquisition_at"].isoformat() if r["last_acquisition_at"] else None,
+            }
+            for r in rows
+        ]
+
+        return {
+            "items": items,
+            "total": total or 0,
+            "limit": limit,
+            "offset": offset,
+        }
 
 
 @app.get("/processes/{code}")

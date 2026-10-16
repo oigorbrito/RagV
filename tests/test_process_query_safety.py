@@ -223,6 +223,22 @@ class ProcessQuerySafetyUnitTests(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(res_old.acquired_today)
         self.assertIn("histórico disponível", res_old.advisory)
 
+    def test_list_processes_unauthorized_fails_closed(self):
+        from fastapi.testclient import TestClient
+        from app.api import app
+
+        client = TestClient(app)
+        response = client.get("/processes")
+        self.assertEqual(response.status_code, 401)
+
+    def test_list_processos_v1_unauthorized_fails_closed(self):
+        from fastapi.testclient import TestClient
+        from app.api import app
+
+        client = TestClient(app)
+        response = client.get("/v1/processos")
+        self.assertEqual(response.status_code, 401)
+
 
 if __name__ == "__main__":
     unittest.main()
