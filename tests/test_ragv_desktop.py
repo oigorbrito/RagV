@@ -18,6 +18,13 @@ spec.loader.exec_module(desktop)
 
 class DesktopLauncherTests(unittest.TestCase):
 
+    def test_packaged_desktop_embeds_ragv_v_icon(self):
+        icon = ROOT / "app" / "frontend" / "ragv.ico"
+        spec_file = ROOT / "RagVDesktop.spec"
+        self.assertTrue(icon.is_file())
+        self.assertEqual(icon.read_bytes()[:4], bytes((0, 0, 1, 0)))
+        self.assertIn("icon='app/frontend/ragv.ico'", spec_file.read_text(encoding="utf-8"))
+
     @patch.object(desktop.urllib.request, "urlopen")
     def test_api_ready_success(self, urlopen):
         response = MagicMock()
@@ -61,7 +68,7 @@ class DesktopLauncherTests(unittest.TestCase):
         fake_webview.start.assert_called_once()
 
         args, kwargs = fake_webview.create_window.call_args
-        self.assertEqual(args[0], "RagV Desktop")
+        self.assertEqual(args[0], "RagV")
         self.assertEqual(args[1], desktop.URL)
 
     @patch.object(desktop, "api_ready", return_value=True)
@@ -86,7 +93,7 @@ class DesktopLauncherTests(unittest.TestCase):
             desktop.show_error("Falha de teste")
 
         mock_msgbox.assert_called_once_with(
-            None, "Falha de teste", "RagV Desktop", 0x10
+            None, "Falha de teste", "RagV", 0x10
         )
 
     @patch("sys.stderr")

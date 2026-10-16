@@ -44,6 +44,12 @@ const form = document.querySelector('#search-form'),
   authStatus = document.querySelector('#auth-status'),
   sourceJuditRadio = document.querySelector('#source-judit'),
   sourceDataJudRadio = document.querySelector('#source-datajud'),
+  juditInfoButton = document.querySelector('#judit-info'),
+  juditInfoWrap = document.querySelector('#judit-info-wrap'),
+  juditTooltip = document.querySelector('#judit-tooltip'),
+  datajudInfoButton = document.querySelector('#datajud-info'),
+  datajudInfoWrap = document.querySelector('#datajud-info-wrap'),
+  datajudTooltip = document.querySelector('#datajud-tooltip'),
   datajudStatusHint = document.querySelector('#datajud-status-hint'),
   apiConnectivity = document.querySelector('#api-connectivity'),
   apiConnectivityLabel = document.querySelector('#api-connectivity-label');
@@ -196,17 +202,13 @@ async function fetchCapabilities() {
       if (datajud.enabled) {
         sourceDataJudRadio.disabled = false;
         if (datajudStatusHint) {
-          datajudStatusHint.textContent = 'Habilitado para consulta de metadados textuais.';
+          datajudStatusHint.textContent = '';
           datajudStatusHint.className = 'source-hint';
         }
       } else {
         sourceDataJudRadio.disabled = true;
-        if (sourceDataJudRadio.checked && sourceJuditRadio) {
-          sourceJuditRadio.checked = true;
-          currentSource = 'judit';
-        }
         if (datajudStatusHint) {
-          datajudStatusHint.textContent = datajud.reason_unavailable || 'DataJud desabilitado no servidor.';
+          datajudStatusHint.textContent = 'DataJud indisponível';
           datajudStatusHint.className = 'source-warning';
         }
       }
@@ -843,7 +845,7 @@ async function searchProcess() {
     if (sourceDataJudRadio && sourceDataJudRadio.disabled) {
       setStatus(
         'DataJud indisponível',
-        'A integração com o DataJud está desabilitada no servidor. Selecione Judit para realizar a consulta.',
+        'A consulta não foi enviada. O servidor não autorizou o uso do DataJud; a fonte não será trocada automaticamente.',
         { error: true }
       );
       return;
@@ -1257,6 +1259,51 @@ if (sourceDataJudRadio) {
     if (sourceDataJudRadio.checked) currentSource = 'datajud';
   });
 }
+
+function bindProviderTooltip(button, wrapper, tooltip) {
+  if (!button || !wrapper || !tooltip) return;
+  let hovering = false,
+    focused = false,
+    clicked = false;
+  const sync = () => {
+    const visible = hovering || focused || clicked;
+    tooltip.hidden = !visible;
+    button.setAttribute('aria-expanded', String(visible));
+  };
+  button.addEventListener('pointerenter', () => {
+    hovering = true;
+    sync();
+  });
+  wrapper.addEventListener('pointerleave', () => {
+    hovering = false;
+    if (!focused) clicked = false;
+    sync();
+  });
+  button.addEventListener('focus', () => {
+    focused = true;
+    sync();
+  });
+  button.addEventListener('blur', () => {
+    focused = false;
+    if (!hovering) clicked = false;
+    sync();
+  });
+  button.addEventListener('click', () => {
+    clicked = true;
+    sync();
+  });
+  button.addEventListener('keydown', (event) => {
+    if (event.key !== 'Escape') return;
+    hovering = false;
+    focused = false;
+    clicked = false;
+    sync();
+    button.blur();
+  });
+}
+
+bindProviderTooltip(juditInfoButton, juditInfoWrap, juditTooltip);
+bindProviderTooltip(datajudInfoButton, datajudInfoWrap, datajudTooltip);
 
 window.addEventListener('pagehide', stopPolling);
 updateAccessState();

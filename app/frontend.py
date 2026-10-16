@@ -21,6 +21,15 @@ async def frontend_index() -> FileResponse:
     )
 
 
+@router.get("/favicon.svg", include_in_schema=False)
+async def frontend_favicon() -> FileResponse:
+    return FileResponse(
+        _FRONTEND_DIR / "favicon.svg",
+        media_type="image/svg+xml",
+        headers={"Cache-Control": "no-cache, must-revalidate"},
+    )
+
+
 @router.get("/app.css", include_in_schema=False)
 async def frontend_css() -> FileResponse:
     return FileResponse(
