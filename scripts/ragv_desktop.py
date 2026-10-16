@@ -1,17 +1,22 @@
 """RagV Desktop: janela nativa para o frontend FastAPI existente."""
 
+import os
 import sys
 import urllib.error
 import urllib.request
 
 
-URL = "http://127.0.0.1:8000"
+URL = os.environ.get("RPY_DESKTOP_URL", "http://127.0.0.1:8000")
+
+
+def get_url():
+    return os.environ.get("RPY_DESKTOP_URL", URL)
 
 
 def api_ready():
     try:
         with urllib.request.urlopen(
-            f"{URL}/ready", timeout=3
+            f"{get_url()}/ready", timeout=3
         ) as response:
             return response.status == 200
     except (urllib.error.URLError, TimeoutError, OSError):
@@ -43,7 +48,7 @@ def main():
 
     webview.create_window(
         "RagV Desktop",
-        URL,
+        get_url(),
         width=1200,
         height=800,
         min_size=(800, 600),
