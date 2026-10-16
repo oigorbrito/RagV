@@ -6,6 +6,7 @@ import os
 from pathlib import Path
 import urllib.request
 import urllib.error
+from urllib.parse import urlsplit
 from uuid import UUID
 
 import asyncpg
@@ -39,6 +40,15 @@ def run_http_json(url: str, method: str = "GET", headers: dict | None = None, da
     if data is not None:
         body = json.dumps(data).encode("utf-8")
         h["Content-Type"] = "application/json"
+    parsed_url = urlsplit(url)
+    if (
+        parsed_url.scheme != "http"
+        or parsed_url.hostname != "127.0.0.1"
+        or parsed_url.port != 8008
+        or parsed_url.username is not None
+        or parsed_url.password is not None
+    ):
+        raise ValueError("staging validation only permits its local API endpoint")
     req = urllib.request.Request(url, data=body, headers=h, method=method)
     try:
         with urllib.request.urlopen(req) as resp:
