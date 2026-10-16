@@ -4,7 +4,14 @@ from fastapi.testclient import TestClient
 from app.api import app
 FRONTEND=Path(__file__).parents[1]/"app"/"frontend"
 def test_frontend_routes_are_served_without_database_lifespan()->None:
- client=TestClient(app); index=client.get("/"); assert index.status_code==200; assert "Rpy" in index.text; assert "Número do processo" in index.text; assert "Bearer token" in index.text; assert "Ir para o conteúdo" in index.text; assert 'aria-live="polite"' in index.text; assert "Contexto do processo" in index.text; assert "Últimos acontecimentos" in index.text; assert index.headers["cache-control"]=="no-cache, must-revalidate"; assert client.get("/app.css").headers["cache-control"]=="no-cache, must-revalidate"; assert client.get("/config.js").headers["cache-control"]=="no-cache, must-revalidate"; assert client.get("/app.js").headers["cache-control"]=="no-cache, must-revalidate"
+ client=TestClient(app); index=client.get("/"); assert index.status_code==200; assert "Rpy" in index.text; assert "Número do processo" in index.text; assert "Bearer token" in index.text; assert "Ir para o conteúdo" in index.text; assert 'aria-live="polite"' in index.text; assert "Contexto do processo" in index.text; assert "Últimos acontecimentos" in index.text; assert client.get("/app.css").status_code==200; assert client.get("/config.js").status_code==200; assert client.get("/app.js").status_code==200
+def test_frontend_assets_require_revalidation()->None:
+ client=TestClient(app)
+ checks=unittest.TestCase()
+ for path in ("/","/app.css","/config.js","/app.js"):
+  checks.assertEqual(client.get(path).headers["cache-control"],"no-cache, must-revalidate")
+
+
 def test_frontend_does_not_persist_bearer_token_or_render_model_html()->None:
  source=(FRONTEND/"app.js").read_text(encoding="utf-8"); assert "localStorage" not in source; assert "sessionStorage" not in source; assert "innerHTML" not in source; assert "textContent" in source; assert "Authorization" in source
 def test_frontend_has_explicit_accessibility_and_state_contracts()->None:
@@ -118,10 +125,11 @@ def test_frontend_supports_project_pages_and_configurable_api_origin()->None:
  assert "window.RPY_PUBLIC_CONFIG" in config
  assert "apiUrl(" in source
  assert "API_NOT_CONFIGURED" in source
- assert "function relativeElapsed" in source
- assert 'id="api-connectivity-label"' in html
- assert html.count('class="provider-icon"')==2
- assert 'id="history-trigger"' in html
- assert 'id="confirm-modal"' in html
+ checks=unittest.TestCase()
+ checks.assertIn("function relativeElapsed",source)
+ checks.assertIn('id="api-connectivity-label"',html)
+ checks.assertEqual(html.count('class="provider-icon"'),2)
+ checks.assertIn('id="history-trigger"',html)
+ checks.assertIn('id="confirm-modal"',html)
  assert "localStorage" not in source
  assert "sessionStorage" not in source
