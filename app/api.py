@@ -11,11 +11,12 @@ import asyncpg
 from fastapi import FastAPI, HTTPException, Request
 
 from app.api_key_middleware import ApiKeySecurityMiddleware
-from app.api_key_auth import authorization_header
+from app.api_key_auth import authorization_header, bearer_credential
 from app.api_v1 import router as api_v1_router
 from app.auth import configured_bearer_tokens, tenant_from_request
 from app.browser_origins import BrowserProcessCorsMiddleware
 from app.claim_evidence import claim_evidence_is_publishable, load_summary_claim_evidence
+from app.datajud_client import datajud_config, lookup_datajud_metadata
 from app.db import create_pool
 from app.frontend import router as frontend_router
 from app.http_auth_config import validate_http_auth_config
@@ -135,6 +136,105 @@ async def ready(request: Request) -> dict[str, bool]:
     except (asyncpg.PostgresError, asyncpg.InterfaceError, OSError, TimeoutError):
         raise HTTPException(status_code=503, detail="database unavailable") from None
     return {"ok": True}
+
+
+@app.get("/auth/verify")
+async def verify_auth(request: Request) -> dict[str, Any]:
+    tenant_id = tenant_from_request(request)
+    return {"ok": True, "authenticated": True, "tenant_id": str(tenant_id)}
+
+
+@app.get("/capabilities")
+async def get_capabilities(request: Request) -> dict[str, Any]:
+    authenticated = False
+    tenant_id = None
+    try:
+        if bearer_credential(request):
+            tid = tenant_from_request(request)
+            authenticated = True
+            tenant_id = str(tid)
+    except Exception:
+        authenticated = False
+        tenant_id = None
+
+    try:
+        dj = datajud_config()
+        dj_configured = bool(dj.api_key)
+        dj_enabled = dj.enabled and dj.authorized_use and bool(dj.api_key)
+        if not dj.enabled:
+            dj_reason = "DataJud desabilitado por padrão no servidor (DATAJUD_ENABLED=false)."
+        elif not dj.authorized_use:
+            dj_reason = "Uso de DataJud não autorizado explicitamente (DATAJUD_AUTHORIZED_USE=false)."
+        elif not dj.api_key:
+            dj_reason = "Chave de API do DataJud não configurada no servidor."
+        else:
+            dj_reason = None
+    except Exception as exc:
+        dj_configured = False
+        dj_enabled = False
+        dj_reason = f"Configuração do DataJud indisponível: {exc}"
+
+    return {
+        "authenticated": authenticated,
+        "tenant_id": tenant_id,
+        "default_source": "judit",
+        "sources": {
+            "judit": {
+                "name": "Judit",
+                "configured": True,
+                "enabled": True,
+                "experimental": False,
+                "description": "Fonte principal para busca completa de processos, peças, movimentações e resumos jurídicos.",
+                "operations": ["precheck", "request", "authorization", "read", "history"],
+            },
+            "datajud": {
+                "name": "DataJud",
+                "configured": dj_configured,
+                "enabled": dj_enabled,
+                "experimental": True,
+                "description": "Base pública do CNJ (metadados textuais). Não substitui a Judit; não realiza aquisição de peças nem resumos judiciais automatizados.",
+                "operations": ["metadata_lookup"] if dj_enabled else [],
+                "reason_unavailable": dj_reason,
+            },
+        },
+    }
+
+
+@app.get("/processes/{code}/datajud")
+async def get_datajud_metadata(code: str, request: Request) -> dict[str, Any]:
+    tenant_from_request(request)
+    try:
+        canonical_code = normalize_cnj(code)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="invalid process code") from None
+
+    dj = datajud_config()
+    if not (dj.enabled and dj.authorized_use and dj.api_key):
+        raise HTTPException(
+            status_code=403,
+            detail="DataJud integration is disabled, unauthorized, or missing API key on server",
+        )
+
+    result = await lookup_datajud_metadata(code=canonical_code, secrecy_level=0, config=dj)
+    if result.status == "not_found":
+        raise HTTPException(status_code=404, detail="process not found in DataJud")
+    if result.status != "ok" or result.metadata is None:
+        raise HTTPException(
+            status_code=502,
+            detail=f"DataJud lookup returned status: {result.status} ({result.error_code or 'no details'})",
+        )
+
+    md = result.metadata
+    return {
+        "code": canonical_code,
+        "source": "datajud",
+        "class_name": md.class_name,
+        "court": md.court,
+        "adjudicating_body": md.adjudicating_body,
+        "county": md.county,
+        "subjects": [s.description for s in md.subjects],
+        "parties": [{"name": p.name, "role": p.role, "side": p.side} for p in md.parties],
+    }
 
 
 @app.get("/ops/metrics")

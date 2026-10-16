@@ -239,6 +239,112 @@ class ProcessQuerySafetyUnitTests(unittest.IsolatedAsyncioTestCase):
         response = client.get("/v1/processos")
         self.assertEqual(response.status_code, 401)
 
+    def test_auth_verify_endpoint_unauthorized_and_authorized(self):
+        from fastapi.testclient import TestClient
+        from app.api import app
+
+        tenant_id = uuid4()
+        app.state.bearer_tokens = {"valid-auth-token": tenant_id}
+        client = TestClient(app)
+
+        # 1. Sem token -> 401
+        res_unauth = client.get("/auth/verify")
+        self.assertEqual(res_unauth.status_code, 401)
+
+        # 2. Token inválido -> 401
+        res_invalid = client.get("/auth/verify", headers={"Authorization": "Bearer wrong-token"})
+        self.assertEqual(res_invalid.status_code, 401)
+
+        # 3. Token válido -> 200
+        res_auth = client.get("/auth/verify", headers={"Authorization": "Bearer valid-auth-token"})
+        self.assertEqual(res_auth.status_code, 200)
+        data = res_auth.json()
+        self.assertTrue(data.get("ok"))
+        self.assertTrue(data.get("authenticated"))
+        self.assertEqual(data.get("tenant_id"), str(tenant_id))
+
+    def test_auth_verificar_v1_endpoint_unauthorized_and_authorized(self):
+        from fastapi.testclient import TestClient
+        from app.api import app
+
+        tenant_id = uuid4()
+        app.state.bearer_tokens = {"valid-auth-token-v1": tenant_id}
+        client = TestClient(app)
+
+        res_unauth = client.get("/v1/auth/verificar")
+        self.assertEqual(res_unauth.status_code, 401)
+
+        res_auth = client.get("/v1/auth/verificar", headers={"Authorization": "Bearer valid-auth-token-v1"})
+        self.assertEqual(res_auth.status_code, 200)
+        data = res_auth.json()
+        self.assertTrue(data.get("ok"))
+        self.assertTrue(data.get("authenticated"))
+        self.assertEqual(data.get("tenant_id"), str(tenant_id))
+
+    def test_capabilities_endpoint_public_contract_and_leak_free(self):
+        from fastapi.testclient import TestClient
+        from app.api import app
+
+        client = TestClient(app)
+        for path in ("/capabilities", "/v1/capacidades", "/v1/capabilities"):
+            res = client.get(path)
+            self.assertEqual(res.status_code, 200, f"failed for {path}")
+            data = res.json()
+            self.assertEqual(data.get("default_source"), "judit")
+            self.assertFalse(data.get("authenticated"))
+
+            sources = data.get("sources", {})
+            self.assertIn("judit", sources)
+            self.assertTrue(sources["judit"]["enabled"])
+            self.assertFalse(sources["judit"]["experimental"])
+
+            self.assertIn("datajud", sources)
+            self.assertFalse(sources["datajud"]["enabled"])
+            self.assertTrue(sources["datajud"]["experimental"])
+            self.assertIn("DATAJUD_ENABLED=false", sources["datajud"]["reason_unavailable"])
+
+            # Provar ausência de segredos ou credenciais expostas
+            raw_text = res.text.lower()
+            self.assertNotIn("datajud_api_key", raw_text)
+            self.assertNotIn("judit_api_key", raw_text)
+            self.assertNotIn("secret", raw_text)
+
+    def test_capabilities_authenticated_tenant(self):
+        from fastapi.testclient import TestClient
+        from app.api import app
+
+        tenant_id = uuid4()
+        app.state.bearer_tokens = {"valid-cap-token": tenant_id}
+        client = TestClient(app)
+
+        res = client.get("/capabilities", headers={"Authorization": "Bearer valid-cap-token"})
+        self.assertEqual(res.status_code, 200)
+        data = res.json()
+        self.assertTrue(data.get("authenticated"))
+        self.assertEqual(data.get("tenant_id"), str(tenant_id))
+
+    def test_datajud_process_endpoints_fail_closed_and_forbidden_when_disabled(self):
+        from fastapi.testclient import TestClient
+        from app.api import app
+
+        tenant_id = uuid4()
+        app.state.bearer_tokens = {"datajud-token": tenant_id}
+        client = TestClient(app)
+
+        test_paths = (
+            "/processes/0000000-00.2024.8.26.0100/datajud",
+            "/v1/processos/0000000-00.2024.8.26.0100/datajud",
+        )
+        for path in test_paths:
+            # Sem token -> 401
+            res_unauth = client.get(path)
+            self.assertEqual(res_unauth.status_code, 401)
+
+            # Com token, mas DataJud desabilitado por padrão no servidor -> 403 Forbidden
+            res_auth = client.get(path, headers={"Authorization": "Bearer datajud-token"})
+            self.assertEqual(res_auth.status_code, 403)
+            self.assertIn("disabled", res_auth.json().get("detail", "").lower())
+
 
 if __name__ == "__main__":
     unittest.main()

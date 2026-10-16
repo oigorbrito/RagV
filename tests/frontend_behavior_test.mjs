@@ -19,11 +19,20 @@ const ids = [
   "history-status","history-list","open-existing-history","request-refresh",
   "confirm-modal","confirm-modal-title","confirm-modal-desc","confirm-refresh-submit",
   "confirm-refresh-cancel","refresh-from-result",
+  "verify-token","auth-status","source-judit","source-datajud","datajud-status-hint",
 ];
 
 class ClassList {
   constructor() {
     this.values = new Set();
+  }
+
+  add(...names) {
+    for (const name of names) this.values.add(name);
+  }
+
+  remove(...names) {
+    for (const name of names) this.values.delete(name);
   }
 
   toggle(name, force) {
@@ -36,16 +45,22 @@ class ClassList {
   contains(name) {
     return this.values.has(name);
   }
+
+  has(name) {
+    return this.values.has(name);
+  }
 }
 
 class Element {
   constructor(id) {
     this.id = id;
     this.hidden = ["history-panel", "confirm-modal"].includes(id);
-    this.disabled = false;
+    this.disabled = id === "source-datajud";
     this.value = "";
     this.textContent = "";
-    this.type = id === "bearer-token" ? "password" : "";
+    this.type = id === "bearer-token" ? "password" : id.startsWith("source-") ? "radio" : "";
+    this.checked = id === "source-judit";
+    this.name = id.startsWith("source-") ? "query-source" : "";
     this.children = [];
     this.firstChild = null;
     this.listeners = {};
@@ -121,9 +136,10 @@ function readyPayload(overrides = {}) {
   };
 }
 
-function createHarness(fetchResponses, { apiBase = "same-origin" } = {}) {
+function createHarness(fetchResponses, { apiBase = "same-origin", hasExplicitCapabilities = false } = {}) {
   const elements = Object.fromEntries(ids.map(id => [id, new Element(id)]));
   const requests = [];
+  const capabilitiesRequests = [];
   const timers = new Map();
   const windowListeners = {};
   let fetchIndex = 0;
@@ -182,6 +198,17 @@ function createHarness(fetchResponses, { apiBase = "same-origin" } = {}) {
       timers.delete(id);
     },
     fetch: async (url, options = {}) => {
+      if (url.endsWith("/capabilities") && !hasExplicitCapabilities) {
+        capabilitiesRequests.push({ url, options });
+        return jsonResponse(200, {
+          authenticated: false,
+          default_source: "judit",
+          sources: {
+            judit: { name: "Judit", configured: true, enabled: true, experimental: false },
+            datajud: { name: "DataJud", configured: false, enabled: false, experimental: true, reason_unavailable: "DataJud desabilitado por padrão no servidor (DATAJUD_ENABLED=false)." },
+          },
+        });
+      }
       requests.push({ url, options });
       const response = fetchResponses[Math.min(fetchIndex, fetchResponses.length - 1)];
       fetchIndex += 1;
@@ -195,6 +222,7 @@ function createHarness(fetchResponses, { apiBase = "same-origin" } = {}) {
   return {
     elements,
     requests,
+    capabilitiesRequests,
     clipboard: () => clipboardText,
     hasTimer: () => timers.size > 0,
     async tick() {
@@ -212,6 +240,16 @@ function createHarness(fetchResponses, { apiBase = "same-origin" } = {}) {
       assert.equal(typeof elements[id].listeners.click, "function", `${id} has no click listener`);
       if (elements[id].disabled) return;
       await elements[id].listeners.click();
+    },
+    async changeRadio(id) {
+      assert.equal(elements[id].type, "radio");
+      elements[id].checked = true;
+      for (const other of Object.values(elements)) {
+        if (other !== elements[id] && other.name === elements[id].name) {
+          other.checked = false;
+        }
+      }
+      elements[id].listeners.change?.({ target: elements[id] });
     },
     async clickNavLink(index) {
       assert.equal(typeof navLinks[index].listeners.click, "function", `navLink ${index} has no click listener`);
@@ -831,6 +869,115 @@ await scenario("consulta realizada no mesmo dia destaca aviso de consulta recent
   await ui.search();
   assert.ok(ui.elements["status-detail"].textContent.includes("America/Sao_Paulo"));
   assert.ok(ui.elements["status-detail"].textContent.includes("consultado hoje"));
+});
+
+await scenario("Judit é a fonte padrão selecionada na inicialização", async () => {
+  const ui = createHarness([]);
+  assert.equal(ui.elements["source-judit"].checked, true);
+  assert.equal(ui.elements["source-datajud"].checked, false);
+});
+
+await scenario("autenticação válida atualiza indicador com estado authenticated", async () => {
+  const ui = createHarness([
+    jsonResponse(200, { ok: true, authenticated: true, tenant_id: "tenant-1" }),
+  ]);
+  ui.elements["bearer-token"].value = TOKEN;
+  await ui.click("verify-token");
+  assert.equal(ui.elements["access-trigger"].classList.has("authenticated"), true);
+  assert.equal(ui.elements["access-trigger"].classList.has("invalid"), false);
+  assert.ok(ui.elements["auth-status"].textContent.toLowerCase().includes("autenticad"));
+  assert.equal(ui.requests.length, 1);
+  assert.equal(ui.requests[0].url, "/auth/verify");
+  assert.equal(ui.requests[0].options.headers.Authorization, `Bearer ${TOKEN}`);
+});
+
+await scenario("autenticação inválida atualiza indicador com estado invalid", async () => {
+  const ui = createHarness([
+    jsonResponse(401, { detail: "Token de acesso inválido ou expirado." }),
+  ]);
+  ui.elements["bearer-token"].value = "bad-token";
+  await ui.click("verify-token");
+  assert.equal(ui.elements["access-trigger"].classList.has("invalid"), true);
+  assert.equal(ui.elements["access-trigger"].classList.has("authenticated"), false);
+  assert.ok(ui.elements["auth-status"].textContent.toLowerCase().includes("recusada"));
+});
+
+await scenario("indicador verde somente após validação real pelo backend", async () => {
+  const ui = createHarness([
+    jsonResponse(200, { ok: true, authenticated: true, tenant_id: "tenant-1" }),
+  ]);
+  ui.elements["bearer-token"].value = "some-typing-in-progress";
+  assert.equal(ui.elements["access-trigger"].classList.has("authenticated"), false);
+  assert.equal(ui.elements["access-trigger"].classList.has("invalid"), false);
+
+  ui.elements["bearer-token"].value = TOKEN;
+  await ui.click("verify-token");
+  assert.equal(ui.elements["access-trigger"].classList.has("authenticated"), true);
+});
+
+await scenario("DataJud desabilitado por padrão no servidor", async () => {
+  const ui = createHarness([
+    jsonResponse(200, {
+      authenticated: false,
+      default_source: "judit",
+      sources: {
+        judit: { name: "Judit", configured: true, enabled: true, experimental: false },
+        datajud: {
+          name: "DataJud",
+          configured: false,
+          enabled: false,
+          experimental: true,
+          reason_unavailable: "DataJud desabilitado por padrão no servidor (DATAJUD_ENABLED=false).",
+        },
+      },
+    }),
+  ], { hasExplicitCapabilities: true });
+  await new Promise(r => setTimeout(r, 10));
+  assert.equal(ui.elements["source-datajud"].disabled, true);
+  assert.ok(ui.elements["datajud-status-hint"].textContent.includes("DATAJUD_ENABLED=false"));
+});
+
+await scenario("DataJud sem autorização de uso no servidor permanece desabilitado", async () => {
+  const ui = createHarness([
+    jsonResponse(200, {
+      authenticated: false,
+      default_source: "judit",
+      sources: {
+        judit: { name: "Judit", configured: true, enabled: true, experimental: false },
+        datajud: {
+          name: "DataJud",
+          configured: true,
+          enabled: false,
+          experimental: true,
+          reason_unavailable: "DataJud não autorizado (DATAJUD_AUTHORIZED_USE=true obrigatório).",
+        },
+      },
+    }),
+  ], { hasExplicitCapabilities: true });
+  await new Promise(r => setTimeout(r, 10));
+
+  assert.equal(ui.elements["source-datajud"].disabled, true);
+  assert.ok(ui.elements["datajud-status-hint"].textContent.includes("DATAJUD_AUTHORIZED_USE=true"));
+});
+
+await scenario("ausência de exposição de segredos em tela ou requisições", async () => {
+  const ui = createHarness([]);
+  const htmlContent = [
+    ui.elements["auth-status"].textContent,
+    ui.elements["datajud-status-hint"].textContent,
+  ].join(" ");
+  assert.ok(!htmlContent.includes("DATAJUD_API_KEY"));
+  assert.ok(!htmlContent.includes("JUDIT_API_KEY"));
+  assert.ok(!htmlContent.includes("secret"));
+});
+
+await scenario("troca de fonte não dispara aquisição paga ou consulta automática", async () => {
+  const ui = createHarness([]);
+  ui.elements["source-datajud"].disabled = false;
+  await ui.changeRadio("source-datajud");
+  assert.equal(ui.requests.length, 0);
+  await ui.changeRadio("source-judit");
+  assert.equal(ui.requests.length, 0);
 });
 
 console.log("frontend behavior harness: PASS");

@@ -39,7 +39,12 @@ const form = document.querySelector('#search-form'),
   copyButton = document.querySelector('#copy-summary'),
   summaryEyebrow = document.querySelector('#summary-eyebrow'),
   newSearchButton = document.querySelector('#new-search'),
-  actionFeedback = document.querySelector('#action-feedback');
+  actionFeedback = document.querySelector('#action-feedback'),
+  verifyTokenButton = document.querySelector('#verify-token'),
+  authStatus = document.querySelector('#auth-status'),
+  sourceJuditRadio = document.querySelector('#source-judit'),
+  sourceDataJudRadio = document.querySelector('#source-datajud'),
+  datajudStatusHint = document.querySelector('#datajud-status-hint');
 
 let currentSummary = '',
   pollTimer = null,
@@ -47,7 +52,10 @@ let currentSummary = '',
   pendingRequest = null,
   copyTimer = null,
   currentSearchId = 0,
-  pendingConfirmationCode = null;
+  pendingConfirmationCode = null,
+  currentSource = 'judit',
+  currentAuthState = 'unconfigured',
+  availableCapabilities = null;
 
 const MAX_POLL_ATTEMPTS=20,POLL_INTERVAL_MS=3000,MAX_SUMMARY_POLL_ATTEMPTS=20,SUMMARY_POLL_INTERVAL_MS=3000;
 
@@ -100,10 +108,104 @@ function setLoading(v) {
   result.setAttribute('aria-busy', v ? 'true' : 'false');
 }
 
-function updateAccessState() {
-  const c = Boolean(tokenInput.value.trim());
-  accessTrigger.classList.toggle('configured', c);
-  accessLabel.textContent = c ? 'Acesso configurado' : 'Configurar acesso';
+function updateAccessState(targetState, message) {
+  const token = tokenInput.value.trim();
+  if (!token) {
+    currentAuthState = 'unconfigured';
+    accessTrigger.classList.remove('verifying', 'authenticated', 'invalid', 'configured');
+    accessLabel.textContent = 'Configurar acesso';
+    if (authStatus) authStatus.textContent = message || '';
+    return;
+  }
+  if (targetState) {
+    currentAuthState = targetState;
+  }
+  accessTrigger.classList.remove('verifying', 'authenticated', 'invalid', 'configured');
+  if (currentAuthState === 'authenticated') {
+    accessTrigger.classList.add('authenticated', 'configured');
+    accessLabel.textContent = 'Acesso autenticado';
+    if (authStatus) authStatus.textContent = message || 'Credencial autenticada na API RagV.';
+  } else if (currentAuthState === 'verifying') {
+    accessTrigger.classList.add('verifying');
+    accessLabel.textContent = 'Verificando…';
+    if (authStatus) authStatus.textContent = message || 'Verificando credencial junto à API RagV…';
+  } else if (currentAuthState === 'invalid') {
+    accessTrigger.classList.add('invalid');
+    accessLabel.textContent = 'Credencial recusada';
+    if (authStatus) authStatus.textContent = message || 'A credencial informada foi recusada pela API RagV.';
+  } else {
+    accessLabel.textContent = 'Configurar acesso';
+    if (authStatus) authStatus.textContent = message || 'Credencial informada, clique em Verificar para validar.';
+  }
+}
+
+async function verifyAuthentication(token) {
+  const supplied = token !== undefined ? token : tokenInput.value.trim();
+  if (!supplied) {
+    setFieldError(tokenInput, tokenError, 'Informe a credencial de acesso antes de verificar.');
+    updateAccessState('unconfigured', 'Informe a credencial de acesso.');
+    tokenInput.focus();
+    return false;
+  }
+  setFieldError(tokenInput, tokenError);
+  updateAccessState('verifying', 'Verificando credencial junto à API RagV…');
+  if (verifyTokenButton) verifyTokenButton.disabled = true;
+  try {
+    const response = await fetch(apiUrl('/auth/verify'), {
+      headers: authHeaders(supplied),
+    });
+    if (response.ok) {
+      updateAccessState('authenticated', 'Credencial autenticada com sucesso no ambiente.');
+      return true;
+    }
+    if (response.status === 401) {
+      setFieldError(tokenInput, tokenError, 'A credencial foi recusada. Confira o token e tente novamente.');
+      updateAccessState('invalid', 'Credencial recusada pela API RagV (HTTP 401).');
+      return false;
+    }
+    updateAccessState('invalid', 'Servidor retornou erro ao validar a credencial.');
+    return false;
+  } catch (err) {
+    if (err instanceof Error && err.message === 'API_NOT_CONFIGURED') {
+      updateAccessState('invalid', 'API de staging ainda não configurada.');
+    } else {
+      updateAccessState('invalid', 'Sem conexão com a API RagV para validação.');
+    }
+    return false;
+  } finally {
+    if (verifyTokenButton) verifyTokenButton.disabled = false;
+  }
+}
+
+async function fetchCapabilities() {
+  try {
+    const response = await fetch(apiUrl('/capabilities'));
+    if (!response.ok) return;
+    const data = await response.json();
+    availableCapabilities = data;
+    const datajud = data.sources && data.sources.datajud;
+    if (datajud && sourceDataJudRadio) {
+      if (datajud.enabled) {
+        sourceDataJudRadio.disabled = false;
+        if (datajudStatusHint) {
+          datajudStatusHint.textContent = 'Habilitado para consulta de metadados textuais.';
+          datajudStatusHint.className = 'source-hint';
+        }
+      } else {
+        sourceDataJudRadio.disabled = true;
+        if (sourceDataJudRadio.checked && sourceJuditRadio) {
+          sourceJuditRadio.checked = true;
+          currentSource = 'judit';
+        }
+        if (datajudStatusHint) {
+          datajudStatusHint.textContent = datajud.reason_unavailable || 'DataJud desabilitado no servidor.';
+          datajudStatusHint.className = 'source-warning';
+        }
+      }
+    }
+  } catch {
+    if (sourceDataJudRadio) sourceDataJudRadio.disabled = true;
+  }
 }
 
 function renderMarkdown(md, target) {
@@ -402,6 +504,38 @@ function showProcess(data, { scroll = true, followSummary = true } = {}) {
   }
 }
 
+function showDataJudProcess(data) {
+  stopPolling();
+  clearPendingRequest();
+  document.querySelector('#result-code').textContent = formatCnj(data.code);
+  document.querySelector('#result-class').textContent = data.class_name || 'Não informado';
+  document.querySelector('#result-court').textContent = data.court || 'Não informado';
+  document.querySelector('#result-updated').textContent = 'Consulta direta DataJud/CNJ';
+  document.querySelector('#result-context').textContent = 'Consulta textual de metadados públicos via DataJud (experimental).';
+  renderParties(data.parties || []);
+  renderSubjects(data.subjects || []);
+  renderHeader({ 'Órgão julgador': data.adjudicating_body || 'Não informado', 'Comarca/Foro': data.county || 'Não informada' });
+  renderSteps([]);
+
+  const body = document.querySelector('#summary-body'),
+    provenance = document.querySelector('#summary-provenance');
+  currentSummary = '';
+  copyButton.hidden = true;
+  summaryEyebrow.hidden = false;
+  summaryEyebrow.textContent = 'METADADOS PÚBLICOS DATAJUD';
+  clear(body);
+  const p = document.createElement('p');
+  p.className = 'summary-empty';
+  p.textContent = 'DataJud é uma integração experimental restrita a metadados cadastrais do CNJ. Esta fonte não inclui peças integrais dos autos nem síntese processual automatizada.';
+  body.appendChild(p);
+  provenance.textContent = 'Origem: Base pública DataJud/CNJ. Não substitui a consulta completa via Judit.';
+  result.hidden = false;
+  setStatus();
+  const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  document.querySelector('#result-code').focus({preventScroll:true});
+  result.scrollIntoView({ behavior: reduced ? 'auto' : 'smooth', block: 'start' });
+}
+
 function validCnj(v) {
   return /^\d{20}$/.test(v) || /^\d{7}-\d{2}\.\d{4}\.\d\.\d{2}\.\d{4}$/.test(v);
 }
@@ -678,6 +812,54 @@ async function searchProcess() {
     return;
   }
 
+  if (currentSource === 'datajud') {
+    if (sourceDataJudRadio && sourceDataJudRadio.disabled) {
+      setStatus(
+        'DataJud indisponível',
+        'A integração com o DataJud está desabilitada no servidor. Selecione Judit para realizar a consulta.',
+        { error: true }
+      );
+      return;
+    }
+    const searchId = ++currentSearchId;
+    setLoading(true);
+    setStatus('Consultando DataJud', 'Buscando metadados textuais na base pública do CNJ.');
+    try {
+      const djResp = await fetch(apiUrl(`/processes/${encodeURIComponent(code)}/datajud`), {
+        headers: authHeaders(token),
+      });
+      if (searchId !== currentSearchId) return;
+      if (djResp.status === 401) {
+        updateAccessState('invalid');
+        setFieldError(tokenInput, tokenError, 'A credencial foi recusada. Confira o token e tente novamente.');
+        throw new Error('AUTH');
+      }
+      if (djResp.status === 404) {
+        setStatus('Processo não localizado no DataJud', 'Não foram encontrados registros para este CNJ na base do DataJud.', { error: true });
+        return;
+      }
+      if (djResp.status === 403) {
+        setStatus('DataJud não autorizado', 'A consulta ao DataJud requer autorização explícita e chave configurada no servidor.', { error: true });
+        return;
+      }
+      if (!djResp.ok) throw new Error('SERVER');
+      const djData = await djResp.json();
+      if (searchId !== currentSearchId) return;
+      updateAccessState('authenticated');
+      showDataJudProcess(djData);
+      return;
+    } catch (err) {
+      if (err instanceof Error && err.message === 'AUTH') {
+        setStatus('Não foi possível autorizar a consulta', 'Confira a credencial do ambiente.', { error: true });
+      } else {
+        setStatus('Não foi possível consultar o DataJud', 'Falha na comunicação com o serviço DataJud.', { error: true, retry: true });
+      }
+      return;
+    } finally {
+      setLoading(false);
+    }
+  }
+
   const searchId = ++currentSearchId;
   setLoading(true);
   setStatus('Consultando processo', 'Buscando a versão mais recente disponível para esta credencial.');
@@ -687,9 +869,11 @@ async function searchProcess() {
     if (searchId !== currentSearchId) return;
 
     if (statusResponse.status === 401) {
+      updateAccessState('invalid');
       setFieldError(tokenInput, tokenError, 'A credencial foi recusada. Confira o token e tente novamente.');
       throw new Error('AUTH');
     }
+    updateAccessState('authenticated');
     if (statusResponse.status === 400) throw new Error('INVALID_CODE');
     if (statusResponse.status === 404) {
       pendingRequest={code,token};
@@ -1029,5 +1213,24 @@ newSearchButton.addEventListener('click', () => {
   codeInput.focus();
 });
 
+if (verifyTokenButton) {
+  verifyTokenButton.addEventListener('click', async () => {
+    await verifyAuthentication();
+  });
+}
+
+if (sourceJuditRadio) {
+  sourceJuditRadio.addEventListener('change', () => {
+    if (sourceJuditRadio.checked) currentSource = 'judit';
+  });
+}
+
+if (sourceDataJudRadio) {
+  sourceDataJudRadio.addEventListener('change', () => {
+    if (sourceDataJudRadio.checked) currentSource = 'datajud';
+  });
+}
+
 window.addEventListener('pagehide', stopPolling);
 updateAccessState();
+fetchCapabilities();
