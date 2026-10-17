@@ -2,12 +2,15 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import math
 import os
 from dataclasses import dataclass
+from time import perf_counter
 from typing import Any, Literal
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
+from uuid import uuid4
 
 from app.datajud_enrichment import DataJudMetadata
 from app.http_safety import ResponseTooLargeError, read_bounded_response
@@ -17,6 +20,7 @@ from app.json_utils import loads_strict_json
 DEFAULT_DATAJUD_BASE_URL = "https://api-publica.datajud.cnj.jus.br"
 DEFAULT_DATAJUD_TIMEOUT_SECONDS = 20.0
 DATAJUD_MAX_RESPONSE_BYTES = 1024 * 1024
+logger = logging.getLogger(__name__)
 
 LookupStatus = Literal[
     "ok",
@@ -155,6 +159,8 @@ def datajud_alias_from_cnj(code: str) -> str:
     if segment == "7" and tribunal == "00":
         return "stm"
     if segment == "8":
+        if tribunal == "07":
+            return "tjdft"
         uf = _STATE_TR_TO_UF.get(tribunal)
         if uf:
             return f"tj{uf}"
@@ -243,8 +249,12 @@ def _perform_lookup(
             "User-Agent": "rpy-datajud/0.1",
         },
     )
+    attempt_id = uuid4().hex
+    started = perf_counter()
+    stage = "opening_response"
     try:
         with urlopen(request, timeout=timeout_seconds) as response:  # noqa: S310
+            stage = "reading_response_body"
             raw = read_bounded_response(
                 response,
                 max_bytes=DATAJUD_MAX_RESPONSE_BYTES,
@@ -258,7 +268,19 @@ def _perform_lookup(
         if exc.code in {401, 403}:
             return DataJudLookupResult(status="auth_error", error_code=f"http_{exc.code}")
         return DataJudLookupResult(status="unavailable", error_code=f"http_{exc.code}")
-    except (URLError, TimeoutError, OSError):
+    except (URLError, TimeoutError, OSError) as exc:
+        reason = exc.reason if isinstance(exc, URLError) else None
+        cause_class = type(reason).__name__ if reason is not None else "none"
+        logger.warning(
+            "DataJud transport error attempt_id=%s stage=%s timeout_seconds=%.3f "
+            "duration_ms=%.3f exception_class=%s cause_class=%s",
+            attempt_id,
+            stage,
+            timeout_seconds,
+            (perf_counter() - started) * 1000,
+            type(exc).__name__,
+            cause_class,
+        )
         return DataJudLookupResult(status="unavailable", error_code="transport_error")
 
     try:
@@ -285,10 +307,12 @@ def _perform_lookup(
 async def lookup_datajud_metadata(
     *,
     code: str,
-    secrecy_level: int,
+    secrecy_level: int | None,
     config: DataJudConfig | None = None,
 ) -> DataJudLookupResult:
-    if secrecy_level > 0:
+    # None means classification is unknown, not public; metadata-only DataJud
+    # is separately authorized by the API and worker. Positive levels are blocked.
+    if secrecy_level is not None and secrecy_level > 0:
         return DataJudLookupResult(status="skipped_secrecy")
     active = config or datajud_config()
     if not active.enabled:

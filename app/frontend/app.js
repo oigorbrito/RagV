@@ -745,6 +745,14 @@ async function loadHistoryList() {
     }
     const data = await response.json();
     const items = data.items || [];
+    const datajudResponse = await fetch(apiUrl('/processes/datajud/history'), { headers: authHeaders(token) }).catch(() => null);
+    if (datajudResponse && datajudResponse.ok) {
+      const datajudData = await datajudResponse.json();
+      items.push(...(datajudData.items || []).map(item => ({
+        ...item, source_datajud: true,
+        acquisition_status: ['pending', 'processing'].includes(item.status) ? 'processing' : 'completed',
+      })));
+    }
     if (historyStatus) {
       historyStatus.textContent = items.length
         ? `${items.length} processo(s) consultado(s) pelo tenant.`
@@ -777,7 +785,9 @@ async function loadHistoryList() {
         const badge = document.createElement('span');
         const isProcessing = item.acquisition_status === 'processing';
         badge.className = 'history-badge ' + (isProcessing ? 'processing' : 'completed');
-        badge.textContent = isProcessing ? 'Em andamento' : 'Armazenado';
+        badge.textContent = item.source_datajud
+          ? (isProcessing ? 'DataJud · em andamento' : item.status === 'dead' ? 'DataJud · falha' : item.outcome === 'not_found' ? 'DataJud · sem registro' : 'DataJud')
+          : (isProcessing ? 'Em andamento' : 'Armazenado');
 
         row.append(mainInfo, badge);
 
@@ -787,7 +797,19 @@ async function loadHistoryList() {
             historyPanel.hidden = true;
             if (historyTrigger) historyTrigger.setAttribute('aria-expanded', 'false');
           }
-          if (isProcessing) {
+          if (item.source_datajud) {
+            if (isProcessing) {
+              pendingDataJudRequest = { code: item.code, token, jobId: item.job_id };
+              const searchId = ++currentSearchId;
+              await pollDataJudJob(item.code, token, searchId);
+            } else if (item.metadata) {
+              showDataJudProcess({ code: item.code, ...item.metadata });
+            } else if (item.outcome === 'not_found') {
+              setStatus('Processo não localizado no DataJud', 'A consulta foi concluída sem registros na base consultada.');
+            } else {
+              setStatus('Consulta DataJud indisponível', 'A solicitação não concluiu com metadados. Tente novamente mais tarde.', { error: true, retry: true });
+            }
+          } else if (isProcessing) {
             setStatus('Solicitação em andamento', 'A consulta para este processo já está sendo processada pela fonte. Aguarde a conclusão.');
             scheduleAvailabilityCheck(item.code, token);
           } else {

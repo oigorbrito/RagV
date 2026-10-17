@@ -20,7 +20,14 @@ import app.judit_tracking  # noqa: F401 - imports task registrations
 import app.datajud_tasks  # noqa: F401 - imports task registrations
 import app.rag  # noqa: F401 - imports task registrations
 from app.db import create_pool
+from app.datajud_security import (
+    DataJudProcessKnownSecret,
+    DataJudProcessNotAuthorized,
+    DataJudProcessNotPublic,
+    classify_datajud_lookup,
+)
 from app.json_utils import decode_json_object
+from app.judit import normalize_cnj
 from app.langfuse_tracing import SummaryTrace, start_summary_trace
 from app.log_safety import sanitize_error_message
 from app.public_lifecycle_worker import (
@@ -144,6 +151,35 @@ class Worker:
         self.worker_id = worker_id or uuid4()
         self.stop_event = asyncio.Event()
 
+    async def _verified_datajud_payload(self, payload: dict[str, Any]) -> dict[str, Any]:
+        raw_tenant_id = payload.get("tenant_id")
+        raw_code = payload.get("code")
+        try:
+            tenant_id = UUID(str(raw_tenant_id))
+            if not isinstance(raw_code, str):
+                raise ValueError("invalid process code")
+            code = normalize_cnj(raw_code)
+        except (TypeError, ValueError):
+            raise PermanentTaskError("DataJud job requires an authorized public process") from None
+
+        if payload.get("operation") != "metadata_lookup" or payload.get("purpose") != "public_metadata_lookup":
+            raise PermanentTaskError("DataJud job purpose is invalid")
+        try:
+            async with self.pool.acquire() as conn:
+                classification, secrecy_level = await classify_datajud_lookup(
+                    conn, tenant_id=tenant_id, code=code
+                )
+        except DataJudProcessKnownSecret:
+            raise PermanentTaskError("DataJud job is blocked for a known restricted process") from None
+        except (DataJudProcessNotAuthorized, DataJudProcessNotPublic):
+            raise PermanentTaskError("DataJud job authorization is invalid") from None
+
+        trusted_payload = dict(payload)
+        trusted_payload["code"] = code
+        trusted_payload["classification_at_execution"] = classification
+        trusted_payload["secrecy_level"] = secrecy_level
+        return trusted_payload
+
     async def _heartbeat_loop(self, job_id: UUID) -> None:
         while True:
             await asyncio.sleep(self.settings.heartbeat_interval_seconds)
@@ -160,6 +196,8 @@ class Worker:
         summary_trace = SummaryTrace()
         try:
             handler, payload = _resolve_job_contract(row)
+            if task_name == "lookup_datajud_metadata":
+                payload = await self._verified_datajud_payload(payload)
             if task_name == "generate_process_summary":
                 async with self.pool.acquire() as conn:
                     async with _transaction(conn):

@@ -23,6 +23,7 @@ from app.datajud_jobs import (
     DataJudJobStatusRequest,
     DataJudJobSubmission,
     get_datajud_lookup,
+    list_datajud_history,
     reject_synchronous_datajud_lookup,
     submit_datajud_lookup,
 )
@@ -970,6 +971,12 @@ async def v1_reject_synchronous_datajud_metadata(code: str, request: Request):
 @router.post("/processos/{code}/datajud", status_code=202)
 async def v1_submit_datajud_metadata(code: str, request: Request):
     return await submit_datajud_lookup(request, code)
+
+
+@router.get("/v1/processos/datajud/history")
+@router.get("/processos/datajud/history")
+async def v1_datajud_history(request: Request):
+    return await list_datajud_history(request)
 
 
 @router.post("/v1/processos/datajud/jobs", status_code=202)
