@@ -154,11 +154,11 @@ async def test_lookup_matches_official_trf1_query_and_caps_hits_without_network(
         ),
     )
 
-    assert result.status == "not_found"
-    assert observed["url"] == (
+    assert result.status == "not_found"  # nosec B101 - assert is the pytest check.
+    assert observed["url"] == (  # nosec B101 - assert is the pytest check.
         "https://api-publica.datajud.cnj.jus.br/api_publica_trf1/_search"
     )
-    assert observed["body"] == {
+    assert observed["body"] == {  # nosec B101 - assert is the pytest check.
         "size": 1,
         "query": {
             "match": {"numeroProcesso": "00008323520184013202"},
@@ -301,20 +301,20 @@ async def test_datajud_transport_error_logs_sanitized_diagnostics(
             ),
         )
 
-    assert result.status == "unavailable"
-    assert result.error_code == "transport_error"
+    assert result.status == "unavailable"  # nosec B101 - assert is the pytest check.
+    assert result.error_code == "transport_error"  # nosec B101 - assert is the pytest check.
     records = [record for record in caplog.records if record.name == client.__name__]
-    assert len(records) == 1
+    assert len(records) == 1  # nosec B101 - assert is the pytest check.
     message = records[0].getMessage()
-    assert f"stage={failure_stage}" in message
-    assert "timeout_seconds=3.500" in message
-    assert f"exception_class={expected_exception}" in message
-    assert f"cause_class={expected_cause}" in message
+    assert f"stage={failure_stage}" in message  # nosec B101 - assert is the pytest check.
+    assert "timeout_seconds=3.500" in message  # nosec B101 - assert is the pytest check.
+    assert f"exception_class={expected_exception}" in message  # nosec B101 - assert is the pytest check.
+    assert f"cause_class={expected_cause}" in message  # nosec B101 - assert is the pytest check.
     attempt = message.split("attempt_id=", 1)[1].split(" ", 1)[0]
-    assert len(attempt) == 32
+    assert len(attempt) == 32  # nosec B101 - assert is the pytest check.
     int(attempt, 16)
-    assert sensitive_text not in message
-    assert "secret-value" not in message
+    assert sensitive_text not in message  # nosec B101 - assert is the pytest check.
+    assert "secret-value" not in message  # nosec B101 - assert is the pytest check.
 
 
 class _RawDataJudResponse:

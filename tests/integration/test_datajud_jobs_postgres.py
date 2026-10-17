@@ -102,7 +102,7 @@ async def _set_process_secrecy(pool, *, stored_level: int, source_level: int | N
                 "response_data": response_data,
             },
         }
-        await conn.execute(
+        await conn.execute(  # nosec B608 - static SQL; all dynamic values are bound parameters.
             """INSERT INTO process_versions(
                    id,process_id,source_request_id,source_payload,finalized,finalized_at
                ) VALUES($1,$2,$3,$4::jsonb,TRUE,NOW())""",

@@ -25,7 +25,6 @@ from app.datajud_security import (
     DataJudProcessNotAuthorized,
     DataJudProcessNotPublic,
     classify_datajud_lookup,
-    require_public_datajud_process,
 )
 from app.json_utils import decode_json_object
 from app.judit import normalize_cnj
