@@ -41,6 +41,17 @@ def test_runtime_confinement_accepts_expected_budget() -> None:
     contract._validate_runtime_confinement(_runtime_services())
 
 
+def test_datajud_activation_gate_is_shared_by_api_and_workers() -> None:
+    services = {
+        "api": {"environment": {"DATAJUD_ENABLED": "false", "DATAJUD_AUTHORIZED_USE": "false"}},
+        "worker-1": {"environment": {"DATAJUD_ENABLED": "false", "DATAJUD_AUTHORIZED_USE": "false"}},
+    }
+    contract._validate_datajud_activation_contract(services)
+    services["api"]["environment"]["DATAJUD_ENABLED"] = "true"
+    with pytest.raises(SystemExit, match="api and workers must use the same DATAJUD_ENABLED"):
+        contract._validate_datajud_activation_contract(services)
+
+
 @pytest.mark.parametrize(
     ("field", "value", "message"),
     [

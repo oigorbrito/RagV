@@ -63,7 +63,8 @@ let currentSummary = '',
   pendingConfirmationCode = null,
   currentSource = 'judit',
   currentAuthState = 'unconfigured',
-  availableCapabilities = null;
+  availableCapabilities = null,
+  pendingDataJudRequest = null;
 
 const MAX_POLL_ATTEMPTS=20,POLL_INTERVAL_MS=3000,MAX_SUMMARY_POLL_ATTEMPTS=20,SUMMARY_POLL_INTERVAL_MS=3000;
 
@@ -814,6 +815,61 @@ async function loadHistoryList() {
   }
 }
 
+async function pollDataJudJob(code, token, searchId, attempt = 0) {
+  if (searchId !== currentSearchId) return;
+  const pending = pendingDataJudRequest;
+  if (!pending || pending.code !== code || pending.token !== token || !pending.jobId) return;
+  setLoading(true);
+  try {
+    const response = await fetch(apiUrl(`/processes/${encodeURIComponent(code)}/datajud/jobs/${encodeURIComponent(pending.jobId)}`), {
+      headers: authHeaders(token),
+    });
+    if (searchId !== currentSearchId) return;
+    if (response.status === 401) {
+      updateAccessState('invalid');
+      setFieldError(tokenInput, tokenError, 'A credencial foi recusada. Confira o token e tente novamente.');
+      pendingDataJudRequest = null;
+      setStatus('Não foi possível autorizar a consulta', 'Confira a credencial do ambiente.', { error: true });
+      return;
+    }
+    if (response.status === 202) {
+      if (attempt + 1 >= MAX_POLL_ATTEMPTS) {
+        setStatus('Consulta DataJud em andamento', 'A solicitação continua na fila. Tente novamente para verificar o mesmo pedido.', { retry: true });
+        return;
+      }
+      setStatus('Consultando DataJud', 'A solicitação está sendo processada pelo worker.', { retry: true });
+      pollTimer = setTimeout(() => pollDataJudJob(code, token, searchId, attempt + 1), POLL_INTERVAL_MS);
+      return;
+    }
+    if (response.status === 404) {
+      pendingDataJudRequest = null;
+      setStatus('Processo não localizado no DataJud', 'Não foram encontrados registros para este CNJ na base do DataJud.', { error: true });
+      return;
+    }
+    if (response.status === 403) {
+      pendingDataJudRequest = null;
+      setStatus('DataJud não autorizado', 'A consulta requer autorização explícita no servidor.', { error: true });
+      return;
+    }
+    if (!response.ok) {
+      pendingDataJudRequest = null;
+      setStatus('Não foi possível consultar o DataJud', 'Falha no processamento da consulta. Tente novamente.', { error: true, retry: true });
+      return;
+    }
+    const data = await response.json();
+    if (searchId !== currentSearchId) return;
+    pendingDataJudRequest = null;
+    updateAccessState('authenticated');
+    showDataJudProcess(data);
+  } catch {
+    if (searchId === currentSearchId) {
+      setStatus('Não foi possível consultar o DataJud', 'Falha na comunicação com a API. Tente novamente para verificar o mesmo pedido.', { error: true, retry: true });
+    }
+  } finally {
+    if (searchId === currentSearchId) setLoading(false);
+  }
+}
+
 async function searchProcess() {
   stopPolling();
   clearPendingRequest();
@@ -851,41 +907,47 @@ async function searchProcess() {
       return;
     }
     const searchId = ++currentSearchId;
+    if (!pendingDataJudRequest || pendingDataJudRequest.code !== code || pendingDataJudRequest.token !== token) {
+      pendingDataJudRequest = { code, token, idempotencyKey: `datajud-${Date.now()}-${Math.random().toString(36).slice(2)}`, jobId: null };
+    }
     setLoading(true);
-    setStatus('Consultando DataJud', 'Buscando metadados textuais na base pública do CNJ.');
+    setStatus('Consultando DataJud', 'Enviando a solicitação para processamento pelo worker.');
     try {
       const djResp = await fetch(apiUrl(`/processes/${encodeURIComponent(code)}/datajud`), {
-        headers: authHeaders(token),
+        method: 'POST',
+        headers: { ...authHeaders(token), 'Idempotency-Key': pendingDataJudRequest.idempotencyKey },
       });
       if (searchId !== currentSearchId) return;
       if (djResp.status === 401) {
         updateAccessState('invalid');
         setFieldError(tokenInput, tokenError, 'A credencial foi recusada. Confira o token e tente novamente.');
-        throw new Error('AUTH');
-      }
-      if (djResp.status === 404) {
-        setStatus('Processo não localizado no DataJud', 'Não foram encontrados registros para este CNJ na base do DataJud.', { error: true });
+        pendingDataJudRequest = null;
+        setStatus('Não foi possível autorizar a consulta', 'Confira a credencial do ambiente.', { error: true });
         return;
       }
       if (djResp.status === 403) {
-        setStatus('DataJud não autorizado', 'A consulta ao DataJud requer autorização explícita e chave configurada no servidor.', { error: true });
+        setStatus('DataJud não autorizado', 'A consulta requer autorização explícita no servidor.', { error: true });
+        return;
+      }
+      if (djResp.status === 409) {
+        pendingDataJudRequest = null;
+        setStatus('Solicitação DataJud conflitante', 'A chave de idempotência foi associada a outro processo. Tente novamente.', { error: true, retry: true });
         return;
       }
       if (!djResp.ok) throw new Error('SERVER');
-      const djData = await djResp.json();
+      const accepted = await djResp.json();
       if (searchId !== currentSearchId) return;
-      updateAccessState('authenticated');
-      showDataJudProcess(djData);
+      pendingDataJudRequest.jobId = accepted.job_id;
+      setStatus('Consultando DataJud', 'A solicitação está na fila PostgreSQL para processamento pelo worker.');
+      await pollDataJudJob(code, token, searchId);
       return;
-    } catch (err) {
-      if (err instanceof Error && err.message === 'AUTH') {
-        setStatus('Não foi possível autorizar a consulta', 'Confira a credencial do ambiente.', { error: true });
-      } else {
-        setStatus('Não foi possível consultar o DataJud', 'Falha na comunicação com o serviço DataJud.', { error: true, retry: true });
+    } catch {
+      if (searchId === currentSearchId) {
+        setStatus('Não foi possível consultar o DataJud', 'Falha na comunicação com a API. Tente novamente para verificar o mesmo pedido.', { error: true, retry: true });
       }
       return;
     } finally {
-      setLoading(false);
+      if (searchId === currentSearchId) setLoading(false);
     }
   }
 
@@ -1189,6 +1251,7 @@ document.querySelectorAll('.document-nav a').forEach((link) => {
 
 tokenInput.addEventListener('input', () => {
   stopPolling();
+  pendingDataJudRequest = null;
   clearPendingRequest();
   setFieldError(tokenInput, tokenError);
   updateAccessState();
@@ -1204,6 +1267,7 @@ tokenInput.addEventListener('keydown', async (e) => {
 codeInput.addEventListener('input', () => {
   currentSearchId++;
   stopPolling();
+  pendingDataJudRequest = null;
   clearPendingRequest();
   setFieldError(codeInput, codeError);
   const formatted = formatCnjInput(codeInput.value);
@@ -1235,6 +1299,7 @@ copyButton.addEventListener('click', async () => {
 
 newSearchButton.addEventListener('click', () => {
   stopPolling();
+  pendingDataJudRequest = null;
   clearPendingRequest();
   result.hidden = true;
   setStatus();

@@ -18,10 +18,11 @@ from app.api_key_auth import (
 from app.attachment_signals import attachment_status_flags
 from app.auth import principal_from_request, principal_from_request_unscoped, tenant_from_request
 from app.claim_evidence import claim_evidence_is_publishable, load_summary_claim_evidence
-from app.datajud_client import (
-    datajud_alias_from_cnj,
-    datajud_config,
-    lookup_datajud_metadata,
+from app.datajud_client import datajud_activation_status
+from app.datajud_jobs import (
+    get_datajud_lookup,
+    reject_synchronous_datajud_lookup,
+    submit_datajud_lookup,
 )
 from app.judit import normalize_cnj
 from app.json_utils import decode_json_object, loads_strict_json
@@ -928,22 +929,8 @@ async def v1_get_capabilities(request: Request) -> dict[str, Any]:
         authenticated = False
         tenant_id = None
 
-    try:
-        dj = datajud_config()
-        dj_configured = bool(dj.api_key)
-        dj_enabled = dj.enabled and dj.authorized_use and bool(dj.api_key)
-        if not dj.enabled:
-            dj_reason = "DataJud desabilitado por padrão no servidor (DATAJUD_ENABLED=false)."
-        elif not dj.authorized_use:
-            dj_reason = "Uso de DataJud não autorizado explicitamente (DATAJUD_AUTHORIZED_USE=false)."
-        elif not dj.api_key:
-            dj_reason = "Chave de API do DataJud não configurada no servidor."
-        else:
-            dj_reason = None
-    except Exception as exc:
-        dj_configured = False
-        dj_enabled = False
-        dj_reason = f"Configuração do DataJud indisponível: {exc}"
+    dj_enabled, dj_reason = datajud_activation_status()
+    dj_configured = dj_enabled
 
     return {
         "authenticated": authenticated,
@@ -973,38 +960,18 @@ async def v1_get_capabilities(request: Request) -> dict[str, Any]:
 
 @router.get("/v1/processos/{code}/datajud")
 @router.get("/processos/{code}/datajud")
-async def v1_get_datajud_metadata(code: str, request: Request) -> dict[str, Any]:
-    await principal_from_request_unscoped(request)
-    try:
-        canonical_code = normalize_cnj(code)
-    except ValueError:
-        raise HTTPException(status_code=400, detail="invalid process code") from None
+async def v1_reject_synchronous_datajud_metadata(code: str, request: Request):
+    await reject_synchronous_datajud_lookup(request, code)
 
-    dj = datajud_config()
-    if not (dj.enabled and dj.authorized_use and dj.api_key):
-        raise HTTPException(
-            status_code=403,
-            detail="DataJud integration is disabled, unauthorized, or missing API key on server",
-        )
 
-    result = await lookup_datajud_metadata(code=canonical_code, secrecy_level=0, config=dj)
-    if result.status == "not_found":
-        raise HTTPException(status_code=404, detail="process not found in DataJud")
-    if result.status != "ok" or result.metadata is None:
-        raise HTTPException(
-            status_code=502,
-            detail=f"DataJud lookup returned status: {result.status} ({result.error_code or 'no details'})",
-        )
+@router.post("/v1/processos/{code}/datajud", status_code=202)
+@router.post("/processos/{code}/datajud", status_code=202)
+async def v1_submit_datajud_metadata(code: str, request: Request):
+    return await submit_datajud_lookup(request, code)
 
-    md = result.metadata
-    return {
-        "code": canonical_code,
-        "source": "datajud",
-        "class_name": md.class_name,
-        "court": datajud_alias_from_cnj(canonical_code).upper(),
-        "adjudicating_body": md.adjudicating_body,
-        "county": md.county,
-        "subjects": [dict(subject) for subject in md.subjects],
-        "parties": [],
-    }
+
+@router.get("/v1/processos/{code}/datajud/jobs/{job_id}")
+@router.get("/processos/{code}/datajud/jobs/{job_id}")
+async def v1_read_datajud_metadata_job(code: str, job_id: UUID, request: Request):
+    return await get_datajud_lookup(request, code, job_id)
 

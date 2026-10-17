@@ -21,6 +21,23 @@ is returned to the pipeline as `auth_error` because the CNJ public key may rotat
 Transport failures, throttling and server failures are `unavailable`; they must
 not invalidate the Judit version.
 
+## Authenticated UI lookup path
+
+The frontend submits `POST /processes/{cnj}/datajud` with a client-generated
+`Idempotency-Key`. The API authenticates the bearer/API key, applies its CNJ scope,
+and persists a `lookup_datajud_metadata` job in the PostgreSQL queue. The UI polls
+`GET /processes/{cnj}/datajud/jobs/{job_id}`; the job payload and result are only
+readable by the tenant that submitted that CNJ. Replays return the same job, while
+reusing a key for a different CNJ is rejected. Job results follow the configured
+job-retention policy.
+
+Only workers receive `DATAJUD_API_KEY` and perform provider requests. The API
+receives only the non-secret enablement/authorization flags and does not call the
+DataJud adapter directly. Do not add API credentials or provider egress to the API
+service to work around worker configuration; the provider-enabled worker network
+boundary remains authoritative. If worker configuration is missing, the job fails
+closed and the API returns a generic unavailable response.
+
 ## Current public API contract
 
 Reviewed on 2026-09-17.

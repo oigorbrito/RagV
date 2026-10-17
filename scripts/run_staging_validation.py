@@ -318,6 +318,7 @@ async def verify_post_actions_in_db(initial_jobs: int):
             None,
             lambda: run_http_json(
                 f"{API_ORIGIN}/processes/{CODE_STORED}/datajud",
+                method="POST",
                 headers={"Authorization": f"Bearer {TOKEN_A}"},
             ),
         )
@@ -327,6 +328,7 @@ async def verify_post_actions_in_db(initial_jobs: int):
             None,
             lambda: run_http_json(
                 f"{API_ORIGIN}/processes/{CODE_STORED}/datajud",
+                method="POST",
             ),
         )
         record("Cenário G: Rejeição sem credencial", dj_no_auth_status == 401, f"HTTP status without token: {dj_no_auth_status}")

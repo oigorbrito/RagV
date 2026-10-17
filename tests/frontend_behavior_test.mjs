@@ -985,6 +985,28 @@ await scenario("indicador verde somente após validação real pelo backend", as
   assert.equal(ui.elements["access-trigger"].classList.has("authenticated"), true);
 });
 
+await scenario("DataJud submits an idempotent job and renders its queued API result", async () => {
+  const ui = createHarness([
+    jsonResponse(200, { sources: { datajud: { name: "DataJud", configured: true, enabled: true } } }),
+    jsonResponse(202, { job_id: "9b765ab6-e6fa-4d9a-9943-22f24c516c08", status: "pending" }),
+    jsonResponse(202, { job_id: "9b765ab6-e6fa-4d9a-9943-22f24c516c08", code: VALID_CODE, status: "processing" }),
+    jsonResponse(200, { code: VALID_CODE, source: "datajud", court: "TJRS", class_name: "Classe pública", subjects: [], parties: [] }),
+  ], { hasExplicitCapabilities: true });
+  await new Promise(resolve => setTimeout(resolve, 0));
+  await ui.changeRadio("source-datajud");
+  await ui.search();
+  assert.equal(ui.requests[1].options.method, "POST");
+  assert.match(ui.requests[1].url, /\/datajud$/);
+  assert.equal(ui.requests[1].options.headers.Authorization, `Bearer ${TOKEN}`);
+  assert.match(ui.requests[1].options.headers["Idempotency-Key"], /^datajud-/);
+  assert.match(ui.requests[2].url, /\/datajud\/jobs\/9b765ab6-e6fa-4d9a-9943-22f24c516c08$/);
+  assert.equal(ui.hasTimer(), true);
+  await ui.tick();
+  assert.match(ui.requests[3].url, /\/datajud\/jobs\/9b765ab6-e6fa-4d9a-9943-22f24c516c08$/);
+  assert.equal(ui.elements["result-code"].textContent, VALID_CODE);
+  assert.equal(ui.elements["result-court"].textContent, "TJRS");
+});
+
 await scenario("DataJud desabilitado não troca silenciosamente a seleção para Judit", async () => {
   const ui = createHarness([
     jsonResponse(200, {

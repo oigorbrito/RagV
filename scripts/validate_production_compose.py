@@ -36,6 +36,8 @@ API_REQUIRED_ENV = {
     "RPY_BEARER_TOKENS",
     "RPY_OPS_TOKEN",
     "RPY_BROWSER_ORIGINS",
+    "DATAJUD_ENABLED",
+    "DATAJUD_AUTHORIZED_USE",
     "OPS_BACKUP_MAX_AGE_SECONDS",
     "OPS_QUEUE_WARN_SECONDS",
     "OPS_QUEUE_CRITICAL_SECONDS",
@@ -497,6 +499,14 @@ def _validate_worker_shutdown(services: dict[str, Any]) -> None:
         _fail("both workers must use the same shutdown grace contract")
 
 
+def _validate_datajud_activation_contract(services: dict[str, Any]) -> None:
+    api = _environment(services, "api")
+    worker = _environment(services, "worker-1")
+    for field in ("DATAJUD_ENABLED", "DATAJUD_AUTHORIZED_USE"):
+        if api.get(field) != worker.get(field):
+            _fail(f"api and workers must use the same {field} activation gate")
+
+
 def _validate_worker_embedding_contract(services: dict[str, Any]) -> None:
     fields = (
         "JUDIT_CALLBACK_URL",
@@ -589,6 +599,7 @@ def validate(config: dict[str, Any]) -> None:
     _require_env(services, "attachment-parser", PARSER_REQUIRED_ENV)
     _validate_worker_shutdown(services)
     _validate_worker_embedding_contract(services)
+    _validate_datajud_activation_contract(services)
 
     _forbid_env(services, "api", PROVIDER_SECRETS | MIGRATE_REQUIRED_ENV)
     for service_name in ("worker-1", "worker-2"):
