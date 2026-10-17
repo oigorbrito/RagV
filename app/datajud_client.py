@@ -159,6 +159,8 @@ def datajud_alias_from_cnj(code: str) -> str:
     if segment == "7" and tribunal == "00":
         return "stm"
     if segment == "8":
+        if tribunal == "07":
+            return "tjdft"
         uf = _STATE_TR_TO_UF.get(tribunal)
         if uf:
             return f"tj{uf}"
