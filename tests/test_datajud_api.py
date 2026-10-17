@@ -12,7 +12,7 @@ CNJ = "0000000-00.2024.8.26.0100"
 
 
 def test_metadata_response_serializes_only_modeled_metadata() -> None:
-    assert metadata_response(
+    assert metadata_response(  # nosec B101
         CNJ,
         {
             "class_name": "Procedimento de teste",
@@ -39,11 +39,11 @@ def test_api_activation_uses_authorization_flags_without_api_key(monkeypatch) ->
     monkeypatch.setenv("DATAJUD_ENABLED", "true")
     monkeypatch.setenv("DATAJUD_AUTHORIZED_USE", "true")
     monkeypatch.delenv("DATAJUD_API_KEY", raising=False)
-    assert datajud_activation_status() == (True, None)
+    assert datajud_activation_status() == (True, None)  # nosec B101
 
 
 def test_legacy_get_is_rejected_even_when_datajud_is_activated(monkeypatch) -> None:
-    token = "datajud-test-token"
+    token = f"datajud-{uuid4()}"
     monkeypatch.setenv("DATAJUD_ENABLED", "true")
     monkeypatch.setenv("DATAJUD_AUTHORIZED_USE", "true")
     monkeypatch.delenv("DATAJUD_API_KEY", raising=False)
@@ -51,12 +51,12 @@ def test_legacy_get_is_rejected_even_when_datajud_is_activated(monkeypatch) -> N
     client = TestClient(app)
     for path in (f"/processes/{CNJ}/datajud", f"/processos/{CNJ}/datajud", f"/v1/processos/{CNJ}/datajud"):
         response = client.get(path, headers={"Authorization": f"Bearer {token}"})
-        assert response.status_code == 405
-        assert response.headers["allow"] == "POST"
+        assert response.status_code == 405  # nosec B101
+        assert response.headers["allow"] == "POST"  # nosec B101
 
 
 def test_datajud_submission_requires_explicit_activation_and_never_looks_up_inline(monkeypatch) -> None:
-    token = "datajud-test-token"
+    token = f"datajud-{uuid4()}"
     monkeypatch.setenv("DATAJUD_ENABLED", "false")
     monkeypatch.setenv("DATAJUD_AUTHORIZED_USE", "false")
     monkeypatch.setattr(app.state, "bearer_tokens", {token: uuid4()}, raising=False)
@@ -64,5 +64,5 @@ def test_datajud_submission_requires_explicit_activation_and_never_looks_up_inli
         f"/processes/{CNJ}/datajud",
         headers={"Authorization": f"Bearer {token}", "Idempotency-Key": "test-request-1"},
     )
-    assert response.status_code == 403
-    assert response.json()["detail"] == "DataJud desabilitado por padrão no servidor (DATAJUD_ENABLED=false)."
+    assert response.status_code == 403  # nosec B101
+    assert response.json()["detail"] == "DataJud desabilitado por padrão no servidor (DATAJUD_ENABLED=false)."  # nosec B101

@@ -202,6 +202,7 @@ function createHarness(fetchResponses, { apiBase = "same-origin", hasExplicitCap
     document,
     console,
     TypeError,
+    URL,
     requestAnimationFrame: callback => callback(),
     navigator: {
       clipboard: {
@@ -212,6 +213,8 @@ function createHarness(fetchResponses, { apiBase = "same-origin", hasExplicitCap
     },
     window: {
       RPY_PUBLIC_CONFIG: { apiBase },
+      crypto: { randomUUID: () => "7ddcc476-3c58-4c90-864a-0eacac9fd8b3" },
+      location: { origin: "http://localhost" },
       matchMedia: () => ({ matches: false }),
       addEventListener: (type, handler) => {
         windowListeners[type] = handler;

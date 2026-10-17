@@ -5,7 +5,15 @@ const PUBLIC_CONFIG = window.RPY_PUBLIC_CONFIG || {},
 
 function apiUrl(path) {
   if (!API_CONFIGURED) throw new Error('API_NOT_CONFIGURED');
-  return `${API_BASE}${path}`;
+  const base = new URL(API_BASE || window.location.origin, window.location.origin);
+  const target = new URL(`${API_BASE}${path}`, base.origin);
+  if (target.origin !== base.origin) throw new Error('API_URL_OUTSIDE_CONFIGURED_ORIGIN');
+  return /^https?:\/\//i.test(API_BASE) ? target.href : `${API_BASE}${path}`;
+}
+
+function newDataJudIdempotencyKey() {
+  if (typeof window.crypto?.randomUUID !== 'function') throw new Error('CRYPTO_UNAVAILABLE');
+  return `datajud-${window.crypto.randomUUID()}`;
 }
 
 const form = document.querySelector('#search-form'),
@@ -908,7 +916,7 @@ async function searchProcess() {
     }
     const searchId = ++currentSearchId;
     if (!pendingDataJudRequest || pendingDataJudRequest.code !== code || pendingDataJudRequest.token !== token) {
-      pendingDataJudRequest = { code, token, idempotencyKey: `datajud-${Date.now()}-${Math.random().toString(36).slice(2)}`, jobId: null };
+      pendingDataJudRequest = { code, token, idempotencyKey: newDataJudIdempotencyKey(), jobId: null };
     }
     setLoading(true);
     setStatus('Consultando DataJud', 'Enviando a solicitação para processamento pelo worker.');

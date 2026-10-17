@@ -90,7 +90,7 @@ async def submit_datajud_lookup(request: Request, raw_code: str) -> JSONResponse
             )
             created = row is not None
             if row is None:
-                row = await conn.fetchrow(
+                row = await conn.fetchrow(  # nosec B608 - static SQL; the key is a bound $1 value
                     "SELECT id, task_name, status::text AS status, payload FROM jobs WHERE idempotency_key=$1 FOR SHARE",
                     idempotency_key,
                 )
