@@ -50,12 +50,14 @@ def test_process_cors_is_scoped_and_supports_authorization_preflight(
         headers={
             "Origin": "https://oigorbrito.github.io",
             "Access-Control-Request-Method": "GET",
-            "Access-Control-Request-Headers": "authorization",
+            "Access-Control-Request-Headers": "authorization, idempotency-key",
         },
     )
     assert preflight.status_code == 200
     assert preflight.headers["access-control-allow-origin"] == "https://oigorbrito.github.io"
-    assert "authorization" in preflight.headers["access-control-allow-headers"].lower()
+    allowed_headers = preflight.headers["access-control-allow-headers"].lower()
+    assert "authorization" in allowed_headers  # nosec B101
+    assert "idempotency-key" in allowed_headers  # nosec B101
 
     process_response = client.get(
         "/processes/123",

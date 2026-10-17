@@ -343,7 +343,7 @@ class ProcessQuerySafetyUnitTests(unittest.IsolatedAsyncioTestCase):
             # Com token, mas DataJud desabilitado por padrão no servidor -> 403 Forbidden
             res_auth = client.get(path, headers={"Authorization": "Bearer datajud-token"})
             self.assertEqual(res_auth.status_code, 403)
-            self.assertIn("disabled", res_auth.json().get("detail", "").lower())
+            self.assertIn("desabilitado", res_auth.json().get("detail", "").lower())
 
 
 if __name__ == "__main__":

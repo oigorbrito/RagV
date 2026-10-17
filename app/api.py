@@ -16,7 +16,14 @@ from app.api_v1 import router as api_v1_router
 from app.auth import configured_bearer_tokens, tenant_from_request
 from app.browser_origins import BrowserProcessCorsMiddleware
 from app.claim_evidence import claim_evidence_is_publishable, load_summary_claim_evidence
-from app.datajud_client import datajud_config, lookup_datajud_metadata
+from app.datajud_client import datajud_activation_status
+from app.datajud_jobs import (
+    DataJudJobStatusRequest,
+    DataJudJobSubmission,
+    get_datajud_lookup,
+    reject_synchronous_datajud_lookup,
+    submit_datajud_lookup,
+)
 from app.db import create_pool
 from app.frontend import router as frontend_router
 from app.http_auth_config import validate_http_auth_config
@@ -157,22 +164,8 @@ async def get_capabilities(request: Request) -> dict[str, Any]:
         authenticated = False
         tenant_id = None
 
-    try:
-        dj = datajud_config()
-        dj_configured = bool(dj.api_key)
-        dj_enabled = dj.enabled and dj.authorized_use and bool(dj.api_key)
-        if not dj.enabled:
-            dj_reason = "DataJud desabilitado por padrão no servidor (DATAJUD_ENABLED=false)."
-        elif not dj.authorized_use:
-            dj_reason = "Uso de DataJud não autorizado explicitamente (DATAJUD_AUTHORIZED_USE=false)."
-        elif not dj.api_key:
-            dj_reason = "Chave de API do DataJud não configurada no servidor."
-        else:
-            dj_reason = None
-    except Exception as exc:
-        dj_configured = False
-        dj_enabled = False
-        dj_reason = f"Configuração do DataJud indisponível: {exc}"
+    dj_enabled, dj_reason = datajud_activation_status()
+    dj_configured = dj_enabled
 
     return {
         "authenticated": authenticated,
@@ -201,40 +194,34 @@ async def get_capabilities(request: Request) -> dict[str, Any]:
 
 
 @app.get("/processes/{code}/datajud")
-async def get_datajud_metadata(code: str, request: Request) -> dict[str, Any]:
-    tenant_from_request(request)
+async def reject_synchronous_datajud_metadata(code: str, request: Request):
+    await reject_synchronous_datajud_lookup(request, code)
+
+
+@app.post("/processes/{code}/datajud", status_code=202)
+async def submit_datajud_metadata(code: str, request: Request):
+    return await submit_datajud_lookup(request, code)
+
+
+@app.get("/processes/{code}/datajud/jobs/{job_id}")
+async def read_datajud_metadata_job(code: str, job_id: str, request: Request):
+    from uuid import UUID
+
     try:
-        canonical_code = normalize_cnj(code)
+        parsed_job_id = UUID(job_id)
     except ValueError:
-        raise HTTPException(status_code=400, detail="invalid process code") from None
+        raise HTTPException(status_code=404, detail="DataJud job not found") from None
+    return await get_datajud_lookup(request, code, parsed_job_id)
 
-    dj = datajud_config()
-    if not (dj.enabled and dj.authorized_use and dj.api_key):
-        raise HTTPException(
-            status_code=403,
-            detail="DataJud integration is disabled, unauthorized, or missing API key on server",
-        )
 
-    result = await lookup_datajud_metadata(code=canonical_code, secrecy_level=0, config=dj)
-    if result.status == "not_found":
-        raise HTTPException(status_code=404, detail="process not found in DataJud")
-    if result.status != "ok" or result.metadata is None:
-        raise HTTPException(
-            status_code=502,
-            detail=f"DataJud lookup returned status: {result.status} ({result.error_code or 'no details'})",
-        )
+@app.post("/processes/datajud/jobs", status_code=202)
+async def enqueue_datajud_job(body: DataJudJobSubmission, request: Request):
+    return await submit_datajud_lookup(request, body.code)
 
-    md = result.metadata
-    return {
-        "code": canonical_code,
-        "source": "datajud",
-        "class_name": md.class_name,
-        "court": md.court,
-        "adjudicating_body": md.adjudicating_body,
-        "county": md.county,
-        "subjects": [s.description for s in md.subjects],
-        "parties": [{"name": p.name, "role": p.role, "side": p.side} for p in md.parties],
-    }
+
+@app.post("/processes/datajud/jobs/status")
+async def poll_datajud_job(body: DataJudJobStatusRequest, request: Request):
+    return await get_datajud_lookup(request, body.code, body.job_id)
 
 
 @app.get("/ops/metrics")

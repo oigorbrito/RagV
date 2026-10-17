@@ -41,6 +41,8 @@ services:
       RPY_OPS_TOKEN: ${RPY_OPS_TOKEN:-dev-ops-token}
       RETENTION_DAYS: ${RETENTION_DAYS:-365}
       JOB_RETENTION_DAYS: ${JOB_RETENTION_DAYS:-30}
+      DATAJUD_ENABLED: ${DATAJUD_ENABLED:-false}
+      DATAJUD_AUTHORIZED_USE: ${DATAJUD_AUTHORIZED_USE:-false}
     ports:
       - "8000:8000"
     depends_on:
@@ -64,6 +66,9 @@ services:
     environment:
       <<: *rpy-env
       JUDIT_API_KEY: ${JUDIT_API_KEY:-}
+      DATAJUD_API_KEY: ${DATAJUD_API_KEY:-}
+      DATAJUD_BASE_URL: ${DATAJUD_BASE_URL:-https://api-publica.datajud.cnj.jus.br}
+      DATAJUD_TIMEOUT_SECONDS: ${DATAJUD_TIMEOUT_SECONDS:-20}
       JUDIT_TIMEOUT_SECONDS: ${JUDIT_TIMEOUT_SECONDS:-15}
       JUDIT_CALLBACK_URL: ${JUDIT_CALLBACK_URL:-}
       JUDIT_ATTACHMENTS_ENABLED: ${JUDIT_ATTACHMENTS_ENABLED:-false}
@@ -79,6 +84,9 @@ services:
     environment:
       <<: *rpy-env
       JUDIT_API_KEY: ${JUDIT_API_KEY:-}
+      DATAJUD_API_KEY: ${DATAJUD_API_KEY:-}
+      DATAJUD_BASE_URL: ${DATAJUD_BASE_URL:-https://api-publica.datajud.cnj.jus.br}
+      DATAJUD_TIMEOUT_SECONDS: ${DATAJUD_TIMEOUT_SECONDS:-20}
       JUDIT_CALLBACK_URL: ${JUDIT_CALLBACK_URL:-}
       JUDIT_TIMEOUT_SECONDS: ${JUDIT_TIMEOUT_SECONDS:-15}
     depends_on:

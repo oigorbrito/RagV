@@ -17,6 +17,7 @@ import app.judit_tasks  # noqa: F401 - imports task registrations
 import app.judit_attachments  # noqa: F401 - imports task registrations
 import app.process_requests  # noqa: F401 - imports task registrations
 import app.judit_tracking  # noqa: F401 - imports task registrations
+import app.datajud_tasks  # noqa: F401 - imports task registrations
 import app.rag  # noqa: F401 - imports task registrations
 from app.db import create_pool
 from app.json_utils import decode_json_object

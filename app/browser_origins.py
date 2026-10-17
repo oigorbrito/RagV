@@ -27,7 +27,7 @@ class BrowserProcessCorsMiddleware:
             allow_origins=configured_browser_origins(),
             allow_credentials=False,
             allow_methods=["GET", "POST", "OPTIONS"],
-            allow_headers=["Authorization", "Accept", "Content-Type"],
+            allow_headers=["Authorization", "Accept", "Content-Type", "Idempotency-Key"],
             max_age=600,
         )
 

@@ -43,6 +43,16 @@ def test_local_judit_credentials_and_callback_are_worker_only() -> None:
         )
 
 
+def test_datajud_lookup_configuration_keeps_provider_key_worker_only() -> None:
+    compose = (ROOT / "compose.yaml").read_text(encoding="utf-8")
+    api = _service_block(compose, "api")
+    _require("DATAJUD_ENABLED" in api and "DATAJUD_AUTHORIZED_USE" in api, "API needs only non-secret activation flags")
+    _require("DATAJUD_API_KEY" not in api, "API must not receive the DataJud credential")
+    for service in ("worker-1", "worker-2"):
+        block = _service_block(compose, service)
+        _require("DATAJUD_API_KEY: ${DATAJUD_API_KEY:-}" in block, f"{service} must receive the DataJud credential")
+
+
 def test_local_env_example_keeps_callback_opt_in_and_secret_free() -> None:
     env_example = (ROOT / ".env.example").read_text(encoding="utf-8")
     _require("JUDIT_CALLBACK_URL=" in env_example, "callback opt-in must be documented")

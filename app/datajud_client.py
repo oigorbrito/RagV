@@ -86,6 +86,20 @@ def _env_bool(name: str, default: bool = False) -> bool:
     raise RuntimeError(f"{name} must be a boolean")
 
 
+def datajud_activation_status() -> tuple[bool, str | None]:
+    """Return non-secret API-side gates; provider credentials stay in workers."""
+    try:
+        enabled = _env_bool("DATAJUD_ENABLED", False)
+        authorized_use = _env_bool("DATAJUD_AUTHORIZED_USE", False)
+    except RuntimeError:
+        return False, "DataJud configuration is invalid"
+    if not enabled:
+        return False, "DataJud desabilitado por padrão no servidor (DATAJUD_ENABLED=false)."
+    if not authorized_use:
+        return False, "Uso de DataJud não autorizado explicitamente (DATAJUD_AUTHORIZED_USE=false)."
+    return True, None
+
+
 def datajud_config() -> DataJudConfig:
     enabled = _env_bool("DATAJUD_ENABLED", False)
     authorized_use = _env_bool("DATAJUD_AUTHORIZED_USE", False)
