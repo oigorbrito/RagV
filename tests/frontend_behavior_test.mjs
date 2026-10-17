@@ -868,6 +868,7 @@ await scenario("listagem de histórico exibe processos do tenant e permite abrir
       ],
       total: 1,
     }),
+    jsonResponse(200, { items: [] }),
     jsonResponse(200, readyPayload()),
   ]);
 
@@ -876,16 +877,17 @@ await scenario("listagem de histórico exibe processos do tenant e permite abrir
 
   assert.match(ui.elements["history-list"].children[0].renderedText, /Consultado há/);
   assert.equal(ui.elements["history-panel"].hidden, false);
-  assert.equal(ui.requests.length, 1);
+  assert.equal(ui.requests.length, 2);
   assert.equal(ui.requests[0].url, "/processes?limit=50");
+  assert.equal(ui.requests[1].url, "/processes/datajud/history");
   assert.equal(ui.elements["history-list"].children.length, 1);
 
   const historyItem = ui.elements["history-list"].children[0];
   await historyItem.listeners.click();
 
   assert.equal(ui.elements["history-panel"].hidden, true);
-  assert.equal(ui.requests.length, 2);
-  assert.equal(ui.requests[1].url, `/processes/${encodeURIComponent(VALID_CODE)}`);
+  assert.equal(ui.requests.length, 3);
+  assert.equal(ui.requests[2].url, `/processes/${encodeURIComponent(VALID_CODE)}`);
   assert.equal(ui.elements["result"].hidden, false);
 });
 
@@ -1010,6 +1012,21 @@ await scenario("DataJud submits an idempotent job and renders its queued API res
   assert.equal(ui.requests[3].url, "/processes/datajud/jobs/status");
   assert.equal(ui.elements["result-code"].textContent, VALID_CODE);
   assert.equal(ui.elements["result-court"].textContent, "TJRS");
+});
+
+await scenario("DataJud independente recuperado do histórico mostra apenas metadados persistidos", async () => {
+  const ui = createHarness([
+    jsonResponse(200, { items: [] }),
+    jsonResponse(200, { items: [{ job_id: "c6c8880b-1196-4bd2-9755-8aeadfb5f013", code: VALID_CODE, status: "completed", created_at: "2026-10-16T12:00:00Z", metadata: { source: "datajud", court: "TJRS", class_name: "Classe persistida", subjects: [], parties: [] } }] }),
+  ]);
+  ui.elements["bearer-token"].value = TOKEN;
+  await ui.click("history-trigger");
+  const row = ui.elements["history-list"].children[0];
+  assert.match(row.renderedText, /DataJud/);
+  await row.listeners.click();
+  assert.equal(ui.elements["result-class"].textContent, "Classe persistida");
+  assert.equal(ui.elements["result-court"].textContent, "TJRS");
+  assert.equal(ui.requests.length, 2);
 });
 
 await scenario("DataJud desabilitado não troca silenciosamente a seleção para Judit", async () => {

@@ -21,6 +21,7 @@ from app.datajud_jobs import (
     DataJudJobStatusRequest,
     DataJudJobSubmission,
     get_datajud_lookup,
+    list_datajud_history,
     reject_synchronous_datajud_lookup,
     submit_datajud_lookup,
 )
@@ -212,6 +213,11 @@ async def read_datajud_metadata_job(code: str, job_id: str, request: Request):
     except ValueError:
         raise HTTPException(status_code=404, detail="DataJud job not found") from None
     return await get_datajud_lookup(request, code, parsed_job_id)
+
+
+@app.get("/processes/datajud/history")
+async def read_datajud_history(request: Request):
+    return await list_datajud_history(request)
 
 
 @app.post("/processes/datajud/jobs", status_code=202)

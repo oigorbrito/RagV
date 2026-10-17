@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 import json
-from urllib.error import HTTPError
+import logging
+from urllib.error import HTTPError, URLError
 
 import pytest
 
@@ -21,6 +22,7 @@ from app.datajud_client import (
         ("0000000-00.2026.5.04.0001", "trt4"),
         ("0000000-00.2026.6.21.0001", "tre-rs"),
         ("0000000-00.2026.8.21.0001", "tjrs"),
+        ("07223914020178070001", "tjdft"),
         ("0000000-00.2026.9.21.0001", "tjmrs"),
         ("0000000-00.2026.5.00.0000", "tst"),
         ("0000000-00.2026.6.00.0000", "tse"),
@@ -133,6 +135,38 @@ async def test_datajud_lookup_parses_official_metadata_without_network(monkeypat
 
 
 @pytest.mark.asyncio
+async def test_lookup_matches_official_trf1_query_and_caps_hits_without_network(monkeypatch) -> None:
+    observed: dict[str, object] = {}
+
+    def fake_urlopen(request, timeout):
+        observed["url"] = request.full_url
+        observed["body"] = json.loads(request.data.decode("utf-8"))
+        return _Response({"hits": {"hits": []}})
+
+    monkeypatch.setattr(client, "urlopen", fake_urlopen)
+    result = await lookup_datajud_metadata(
+        code="00008323520184013202",
+        secrecy_level=0,
+        config=DataJudConfig(
+            enabled=True,
+            authorized_use=True,
+            api_key="synthetic-key",
+        ),
+    )
+
+    assert result.status == "not_found"  # nosec B101 - assert is the pytest check.
+    assert observed["url"] == (  # nosec B101 - assert is the pytest check.
+        "https://api-publica.datajud.cnj.jus.br/api_publica_trf1/_search"
+    )
+    assert observed["body"] == {  # nosec B101 - assert is the pytest check.
+        "size": 1,
+        "query": {
+            "match": {"numeroProcesso": "00008323520184013202"},
+        },
+    }
+
+
+@pytest.mark.asyncio
 async def test_datajud_lookup_is_disabled_and_secret_safe_without_transport(monkeypatch) -> None:
     def forbidden(*args, **kwargs):
         raise AssertionError("transport must not be called")
@@ -226,6 +260,61 @@ async def test_datajud_rejects_oversized_response_before_decode(monkeypatch) -> 
         raise AssertionError(f"unexpected status: {result.status}")
     if result.error_code != "response_too_large":
         raise AssertionError(f"unexpected error code: {result.error_code}")
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("failure_stage", "expected_exception", "expected_cause"),
+    [
+        ("opening_response", "URLError", "TimeoutError"),
+        ("reading_response_body", "TimeoutError", "none"),
+    ],
+)
+async def test_datajud_transport_error_logs_sanitized_diagnostics(
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+    failure_stage: str,
+    expected_exception: str,
+    expected_cause: str,
+) -> None:
+    sensitive_text = "CNJ=00000000000000000000 Authorization=APIKey secret-value"
+
+    class TimeoutResponse(_Response):
+        def read(self, amount: int = -1) -> bytes:
+            raise TimeoutError(sensitive_text)
+
+    def failing(request, timeout):
+        if failure_stage == "opening_response":
+            raise URLError(TimeoutError(sensitive_text))
+        return TimeoutResponse({})
+
+    monkeypatch.setattr(client, "urlopen", failing)
+    with caplog.at_level(logging.WARNING, logger=client.__name__):
+        result = await lookup_datajud_metadata(
+            code="0000000-00.2026.8.21.0001",
+            secrecy_level=0,
+            config=DataJudConfig(
+                enabled=True,
+                authorized_use=True,
+                api_key="secret-value",
+                timeout_seconds=3.5,
+            ),
+        )
+
+    assert result.status == "unavailable"  # nosec B101 - assert is the pytest check.
+    assert result.error_code == "transport_error"  # nosec B101 - assert is the pytest check.
+    records = [record for record in caplog.records if record.name == client.__name__]
+    assert len(records) == 1  # nosec B101 - assert is the pytest check.
+    message = records[0].getMessage()
+    assert f"stage={failure_stage}" in message  # nosec B101 - assert is the pytest check.
+    assert "timeout_seconds=3.500" in message  # nosec B101 - assert is the pytest check.
+    assert f"exception_class={expected_exception}" in message  # nosec B101 - assert is the pytest check.
+    assert f"cause_class={expected_cause}" in message  # nosec B101 - assert is the pytest check.
+    attempt = message.split("attempt_id=", 1)[1].split(" ", 1)[0]
+    assert len(attempt) == 32  # nosec B101 - assert is the pytest check.
+    int(attempt, 16)
+    assert sensitive_text not in message  # nosec B101 - assert is the pytest check.
+    assert "secret-value" not in message  # nosec B101 - assert is the pytest check.
 
 
 class _RawDataJudResponse:
