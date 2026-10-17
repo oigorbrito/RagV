@@ -20,7 +20,13 @@ import app.judit_tracking  # noqa: F401 - imports task registrations
 import app.datajud_tasks  # noqa: F401 - imports task registrations
 import app.rag  # noqa: F401 - imports task registrations
 from app.db import create_pool
-from app.datajud_security import DataJudProcessNotAuthorized, DataJudProcessNotPublic, require_public_datajud_process
+from app.datajud_security import (
+    DataJudProcessKnownSecret,
+    DataJudProcessNotAuthorized,
+    DataJudProcessNotPublic,
+    classify_datajud_lookup,
+    require_public_datajud_process,
+)
 from app.json_utils import decode_json_object
 from app.judit import normalize_cnj
 from app.langfuse_tracing import SummaryTrace, start_summary_trace
@@ -157,16 +163,21 @@ class Worker:
         except (TypeError, ValueError):
             raise PermanentTaskError("DataJud job requires an authorized public process") from None
 
+        if payload.get("operation") != "metadata_lookup" or payload.get("purpose") != "public_metadata_lookup":
+            raise PermanentTaskError("DataJud job purpose is invalid")
         try:
             async with self.pool.acquire() as conn:
-                secrecy_level = await require_public_datajud_process(
+                classification, secrecy_level = await classify_datajud_lookup(
                     conn, tenant_id=tenant_id, code=code
                 )
+        except DataJudProcessKnownSecret:
+            raise PermanentTaskError("DataJud job is blocked for a known restricted process") from None
         except (DataJudProcessNotAuthorized, DataJudProcessNotPublic):
-            raise PermanentTaskError("DataJud job requires an authorized public process") from None
+            raise PermanentTaskError("DataJud job authorization is invalid") from None
 
         trusted_payload = dict(payload)
         trusted_payload["code"] = code
+        trusted_payload["classification_at_execution"] = classification
         trusted_payload["secrecy_level"] = secrecy_level
         return trusted_payload
 

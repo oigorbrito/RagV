@@ -14,7 +14,72 @@ class DataJudProcessNotAuthorized(Exception):
 
 
 class DataJudProcessNotPublic(Exception):
-    """The process has no trusted, explicit public classification."""
+    """The process is known to be restricted or lacks verified public evidence."""
+
+
+class DataJudProcessKnownSecret(Exception):
+    """A trusted source or persisted classification identifies secrecy."""
+
+
+async def classify_datajud_lookup(
+    conn: asyncpg.Connection, *, tenant_id: UUID, code: str
+) -> tuple[str, int | None]:
+    """Return verified_public/0, unknown/None, or reject known-secret cases.
+
+    Unknown is not asserted to be public. It is permitted only for this explicit
+    metadata-only DataJud operation under the deployment's opt-in authorization.
+    """
+    row = await conn.fetchrow(
+        """SELECT p.id, p.secrecy_level, p.current_version_id,
+                  pv.finalized, pv.source_payload,
+                  EXISTS (SELECT 1 FROM tenant_processes tp
+                          WHERE tp.process_id=p.id AND tp.tenant_id=$1) AS tenant_linked
+           FROM processes p
+           LEFT JOIN process_versions pv
+             ON pv.id=p.current_version_id AND pv.process_id=p.id
+           WHERE p.code=$2""",
+        tenant_id, code,
+    )
+    if row is None:
+        return "unknown", None
+    try:
+        stored_level = int(row["secrecy_level"])
+    except (TypeError, ValueError):
+        stored_level = -1
+    if stored_level > 0:
+        raise DataJudProcessKnownSecret
+    historical_payloads = await conn.fetch(
+        "SELECT source_payload FROM process_versions WHERE process_id=$1 AND finalized=TRUE",
+        row["id"],
+    )
+    for historical in historical_payloads:
+        try:
+            event = parse_event(decode_json_object(historical["source_payload"], label="DataJud source classification"))
+            if event.is_lawsuit_response and event.code == code and event.response_data:
+                if _explicit_source_secrecy(event.response_data) > 0:
+                    raise DataJudProcessKnownSecret
+        except DataJudProcessKnownSecret:
+            raise
+        except (DataJudProcessNotPublic, KeyError, TypeError, ValueError):
+            continue
+    if row["finalized"] is True:
+        try:
+            event = parse_event(decode_json_object(row["source_payload"], label="DataJud source classification"))
+            if event.is_lawsuit_response and event.code == code and event.response_data:
+                source_level = _explicit_source_secrecy(event.response_data)
+                if source_level > 0:
+                    raise DataJudProcessKnownSecret
+                if stored_level == 0 and row["tenant_linked"]:
+                    try:
+                        await require_public_datajud_process(conn, tenant_id=tenant_id, code=code)
+                        return "verified_public", 0
+                    except (DataJudProcessNotAuthorized, DataJudProcessNotPublic):
+                        pass
+        except DataJudProcessKnownSecret:
+            raise
+        except (DataJudProcessNotPublic, KeyError, TypeError, ValueError):
+            pass
+    return "unknown", None
 
 
 def _explicit_source_secrecy(response_data: dict[str, Any]) -> int:

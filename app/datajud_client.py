@@ -307,10 +307,12 @@ def _perform_lookup(
 async def lookup_datajud_metadata(
     *,
     code: str,
-    secrecy_level: int,
+    secrecy_level: int | None,
     config: DataJudConfig | None = None,
 ) -> DataJudLookupResult:
-    if secrecy_level > 0:
+    # None means classification is unknown, not public; metadata-only DataJud
+    # is separately authorized by the API and worker. Positive levels are blocked.
+    if secrecy_level is not None and secrecy_level > 0:
         return DataJudLookupResult(status="skipped_secrecy")
     active = config or datajud_config()
     if not active.enabled:

@@ -196,8 +196,8 @@ async def test_datajud_job_persists_result_is_idempotent_and_isolated(monkeypatc
                 "/processes/datajud/jobs",
                 {"Authorization": f"Bearer {tokens[1]}", "Idempotency-Key": "request-1"},
             )
-            assert other.status_code == 404  # nosec B101
-            assert other.json()["detail"] == "DataJud process not found"  # nosec B101
+            assert other.status_code == 202  # nosec B101
+            assert other.json()["created"] is True  # nosec B101
 
             unknown = await _submit(
                 client,
@@ -251,18 +251,65 @@ async def test_datajud_job_persists_result_is_idempotent_and_isolated(monkeypatc
 
 
 @pytest.mark.asyncio
-async def test_default_zero_without_judit_source_is_not_public(monkeypatch):
+async def test_new_cnj_without_any_process_row_flows_api_queue_worker_and_history(monkeypatch):
+    pool, tenants, tokens = await _setup(monkeypatch)
+    code = "0000000-00.2024.8.26.0103"
+    calls = []
+
+    async def fake_lookup(**kwargs):
+        calls.append(kwargs["secrecy_level"])
+        return DataJudLookupResult(status="ok", metadata=DataJudMetadata(
+            class_name="Metadado simulado", class_code="91", subjects=(),
+            adjudicating_body="Unidade simulada", county=None,
+        ))
+
+    monkeypatch.setattr("app.datajud_tasks.lookup_datajud_metadata", fake_lookup)
+    monkeypatch.setenv("DATAJUD_API_KEY", "worker-only-test-key")
+    transport = httpx.ASGITransport(app=app)
+    try:
+        async with pool.acquire() as conn:
+            assert await conn.fetchval("SELECT count(*) FROM processes WHERE code=$1", code) == 0  # nosec B101
+        async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+            headers = {"Authorization": f"Bearer {tokens[0]}", "Idempotency-Key": "new-cnj"}
+            first = await client.post("/processes/datajud/jobs", headers=headers, json={"code": code})
+            replay = await client.post("/processes/datajud/jobs", headers=headers, json={"code": code})
+            assert first.status_code == replay.status_code == 202  # nosec B101
+            assert first.json()["job_id"] == replay.json()["job_id"]  # nosec B101
+            assert first.json()["created"] is True and replay.json()["created"] is False  # nosec B101
+            pending = await _status(client, "/processes/datajud/jobs/status", {"Authorization": f"Bearer {tokens[0]}"}, code, first.json()["job_id"])
+            assert pending.status_code == 202  # nosec B101
+            assert await _worker(pool).process_one() is True  # nosec B101
+            completed = await _status(client, "/processes/datajud/jobs/status", {"Authorization": f"Bearer {tokens[0]}"}, code, first.json()["job_id"])
+            assert completed.status_code == 200  # nosec B101
+            assert completed.json()["class_name"] == "Metadado simulado"  # nosec B101
+            history = await client.get("/processes/datajud/history", headers={"Authorization": f"Bearer {tokens[0]}"})
+            assert history.status_code == 200  # nosec B101
+            assert any(item["job_id"] == first.json()["job_id"] and item["metadata"]["class_name"] == "Metadado simulado" for item in history.json()["items"])  # nosec B101
+            cross_tenant = await _status(client, "/processes/datajud/jobs/status", {"Authorization": f"Bearer {tokens[1]}"}, code, first.json()["job_id"])
+            assert cross_tenant.status_code == 404  # nosec B101
+        async with pool.acquire() as conn:
+            durable = await conn.fetchrow("SELECT status::text AS status, payload, result FROM jobs WHERE id=$1", first.json()["job_id"])
+        assert durable["status"] == "completed" and durable["result"]["status"] == "ok"  # nosec B101
+        assert durable["payload"]["purpose"] == "public_metadata_lookup"  # nosec B101
+        assert durable["payload"]["operation"] == "metadata_lookup"  # nosec B101
+        assert durable["payload"]["classification_at_request"] == "unknown"  # nosec B101
+        assert calls == [None]  # nosec B101
+    finally:
+        await pool.close()
+
+
+@pytest.mark.asyncio
+async def test_default_zero_without_judit_source_is_unknown_but_independent_lookup_is_allowed(monkeypatch):
     pool, tenants, tokens = await _setup(monkeypatch)
     code_without_source = "0000000-00.2024.8.26.0102"
     process_id = uuid4()
-    calls = 0
+    calls = []
 
-    async def forbidden_lookup(**kwargs):
-        nonlocal calls
-        calls += 1
-        raise AssertionError("default secrecy zero is not proof of publication")
+    async def fake_lookup(**kwargs):
+        calls.append(kwargs["secrecy_level"])
+        return DataJudLookupResult(status="ok", metadata=DataJudMetadata(class_name="Classe pública", class_code=None, subjects=(), adjudicating_body=None, county=None))
 
-    monkeypatch.setattr("app.datajud_tasks.lookup_datajud_metadata", forbidden_lookup)
+    monkeypatch.setattr("app.datajud_tasks.lookup_datajud_metadata", fake_lookup)
     monkeypatch.setenv("DATAJUD_API_KEY", "worker-only-test-key")
     async with pool.acquire() as conn:
         await conn.execute(
@@ -285,38 +332,33 @@ async def test_default_zero_without_judit_source_is_not_public(monkeypatch):
                 {"Authorization": f"Bearer {tokens[0]}", "Idempotency-Key": "no-source"},
                 code=code_without_source,
             )
-            assert response.status_code == 403  # nosec B101
+            assert response.status_code == 202  # nosec B101
+            queued_job_id = response.json()["job_id"]
+            async with pool.acquire() as conn:
+                queued_payload = await conn.fetchval("SELECT payload FROM jobs WHERE id=$1", queued_job_id)
+            assert queued_payload["classification_at_request"] == "unknown"  # nosec B101
+            assert queued_payload["purpose"] == "public_metadata_lookup"  # nosec B101
 
-        async with pool.acquire() as conn:
-            assert await conn.fetchval("SELECT count(*) FROM jobs") == 0  # nosec B101
-            forged = await enqueue(
-                conn,
-                task_name=DATAJUD_TASK,
-                payload={"tenant_id": str(tenants[0]), "code": code_without_source},
-                idempotency_key="worker-no-source",
-            )
-        assert forged is not None  # nosec B101
         assert await _worker(pool).process_one() is True  # nosec B101
         async with pool.acquire() as conn:
-            status = await conn.fetchval(
-                "SELECT status::text FROM jobs WHERE id=$1", forged["id"]
-            )
-        assert status == "dead" and calls == 0  # nosec B101
+            row = await conn.fetchrow("SELECT status::text AS status, result FROM jobs WHERE id=$1", queued_job_id)
+        assert row["status"] == "completed" and row["result"]["status"] == "ok"  # nosec B101
+        assert calls == [None]  # nosec B101
     finally:
         await pool.close()
 
 
 @pytest.mark.asyncio
-async def test_secret_and_unknown_process_classification_fail_closed(monkeypatch):
+async def test_secret_is_blocked_but_unknown_classification_uses_independent_path(monkeypatch):
     pool, tenants, tokens = await _setup(monkeypatch)
-    calls = 0
+    calls = []
 
-    async def forbidden_lookup(**kwargs):
-        nonlocal calls
-        calls += 1
-        raise AssertionError("unverified process must not reach the provider")
+    async def fake_lookup(**kwargs):
+        calls.append(kwargs["secrecy_level"])
+        return DataJudLookupResult(status="ok", metadata=DataJudMetadata(class_name=None, class_code=None, subjects=(), adjudicating_body=None, county=None))
 
-    monkeypatch.setattr("app.datajud_tasks.lookup_datajud_metadata", forbidden_lookup)
+    monkeypatch.setattr("app.datajud_tasks.lookup_datajud_metadata", fake_lookup)
+    monkeypatch.setenv("DATAJUD_API_KEY", "worker-only-test-key")
     transport = httpx.ASGITransport(app=app)
     try:
         async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
@@ -325,16 +367,23 @@ async def test_secret_and_unknown_process_classification_fail_closed(monkeypatch
             secret = await _submit(client, "/processes/datajud/jobs", headers)
             assert secret.status_code == 403  # nosec B101
 
-            await _set_process_secrecy(pool, stored_level=0, source_level=None)
+            unknown_code = "0000000-00.2024.8.26.0104"
+            async with pool.acquire() as conn:
+                process_id = uuid4()
+                await conn.execute("INSERT INTO processes(id,code) VALUES($1,$2)", process_id, unknown_code)
+                await conn.execute("INSERT INTO tenant_processes(tenant_id,process_id) VALUES($1,$2)", tenants[0], process_id)
             unknown = await _submit(
                 client,
                 "/processes/datajud/jobs",
                 {"Authorization": f"Bearer {tokens[0]}", "Idempotency-Key": "unknown-process"},
+                code=unknown_code,
             )
-            assert unknown.status_code == 403  # nosec B101
+            assert unknown.status_code == 202  # nosec B101
+            assert await _worker(pool).process_one() is True  # nosec B101
         async with pool.acquire() as conn:
-            assert await conn.fetchval("SELECT count(*) FROM jobs") == 0  # nosec B101
-        assert calls == 0  # nosec B101
+            jobs = await conn.fetch("SELECT status::text AS status FROM jobs")
+        assert [row["status"] for row in jobs] == ["completed"]  # nosec B101
+        assert calls == [None]  # nosec B101
     finally:
         await pool.close()
 
@@ -344,12 +393,12 @@ async def test_worker_rechecks_secrecy_and_tenant_authorization_before_provider(
     pool, tenants, tokens = await _setup(monkeypatch)
     calls = 0
 
-    async def forbidden_lookup(**kwargs):
+    async def fake_lookup(**kwargs):
         nonlocal calls
         calls += 1
-        raise AssertionError("unauthorized process must not reach the provider")
+        return DataJudLookupResult(status="ok", metadata=DataJudMetadata(class_name="Resultado", class_code=None, subjects=(), adjudicating_body=None, county=None))
 
-    monkeypatch.setattr("app.datajud_tasks.lookup_datajud_metadata", forbidden_lookup)
+    monkeypatch.setattr("app.datajud_tasks.lookup_datajud_metadata", fake_lookup)
     monkeypatch.setenv("DATAJUD_API_KEY", "worker-only-test-key")
     transport = httpx.ASGITransport(app=app)
     try:
@@ -366,16 +415,17 @@ async def test_worker_rechecks_secrecy_and_tenant_authorization_before_provider(
             unauthorized = await _submit(
                 client,
                 "/processes/datajud/jobs",
-                {"Authorization": f"Bearer {tokens[1]}", "Idempotency-Key": "wrong-tenant"},
+                {"Authorization": "Bearer invalid", "Idempotency-Key": "wrong-tenant"},
             )
-            assert unauthorized.status_code == 404  # nosec B101
+            assert unauthorized.status_code == 401  # nosec B101
 
-        await _set_process_secrecy(pool, stored_level=0, source_level=0)
+        unknown_code = "0000000-00.2024.8.26.0105"
         async with pool.acquire() as conn:
             forged = await enqueue(
                 conn,
                 task_name=DATAJUD_TASK,
-                payload={"tenant_id": str(tenants[1]), "code": CNJ},
+                payload={"tenant_id": str(tenants[1]), "code": unknown_code,
+                         "operation": "metadata_lookup", "purpose": "public_metadata_lookup"},
                 idempotency_key="forged-wrong-tenant",
             )
         assert forged is not None  # nosec B101
@@ -384,8 +434,8 @@ async def test_worker_rechecks_secrecy_and_tenant_authorization_before_provider(
             statuses = await conn.fetch(
                 "SELECT status::text AS status FROM jobs ORDER BY created_at"
             )
-        assert [row["status"] for row in statuses] == ["dead", "dead"]  # nosec B101
-        assert calls == 0  # nosec B101
+        assert [row["status"] for row in statuses] == ["dead", "completed"]  # nosec B101
+        assert calls == 1  # nosec B101
     finally:
         await pool.close()
 
@@ -419,6 +469,13 @@ async def test_datajud_disabled_rejects_without_enqueue_or_provider_call(monkeyp
                 {"Authorization": f"Bearer {tokens[0]}", "Idempotency-Key": "not-authorized"},
             )
             assert unauthorized.status_code == 403  # nosec B101
+            monkeypatch.delenv("DATAJUD_AUTHORIZED_USE")
+            missing_authorization = await _submit(
+                client,
+                "/processes/datajud/jobs",
+                {"Authorization": f"Bearer {tokens[0]}", "Idempotency-Key": "missing-purpose-opt-in"},
+            )
+            assert missing_authorization.status_code == 403  # nosec B101
         async with pool.acquire() as conn:
             assert await conn.fetchval("SELECT count(*) FROM jobs") == 0  # nosec B101
         assert calls == 0  # nosec B101
@@ -466,7 +523,7 @@ async def test_missing_worker_credential_fails_closed_without_provider_call(monk
 async def test_provider_no_hit_and_failure_are_sanitized(monkeypatch):
     pool, tenants, tokens = await _setup(monkeypatch)
     monkeypatch.setenv("DATAJUD_API_KEY", "worker-only-test-key")
-    outcomes = iter((DataJudLookupResult(status="not_found"), DataJudLookupResult(status="unavailable", error_code="secret-detail")))
+    outcomes = iter((DataJudLookupResult(status="not_found"), DataJudLookupResult(status="unavailable", error_code="timeout")))
 
     async def fake_lookup(**kwargs):
         return next(outcomes)
@@ -503,6 +560,14 @@ async def test_provider_no_hit_and_failure_are_sanitized(monkeypatch):
                 failure.json()["job_id"],
             )
             assert unavailable.status_code == 502  # nosec B101
-            assert "secret-detail" not in unavailable.text  # nosec B101
+            assert "timeout" not in unavailable.text  # nosec B101
+
+            history = await client.get(
+                "/processes/datajud/history",
+                headers={"Authorization": f"Bearer {tokens[0]}"},
+            )
+            assert history.status_code == 200  # nosec B101
+            history_items = history.json()["items"]
+            assert any(item["job_id"] == no_hit.json()["job_id"] and item["metadata"] is None for item in history_items)  # nosec B101
     finally:
         await pool.close()

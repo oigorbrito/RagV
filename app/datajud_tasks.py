@@ -15,12 +15,14 @@ async def lookup_datajud_metadata_task(payload: dict[str, Any]) -> dict[str, Any
     if (
         not isinstance(tenant_id, str)
         or not isinstance(raw_code, str)
-        or isinstance(raw_secrecy_level, bool)
-        or not isinstance(raw_secrecy_level, int)
-        or raw_secrecy_level < 0
+        or (raw_secrecy_level is not None and (
+            isinstance(raw_secrecy_level, bool)
+            or not isinstance(raw_secrecy_level, int)
+            or raw_secrecy_level < 0
+        ))
     ):
         raise PermanentTaskError("Invalid DataJud job payload")
-    if raw_secrecy_level > 0:
+    if raw_secrecy_level is not None and raw_secrecy_level > 0:
         return {"status": "skipped_secrecy"}
     try:
         code = normalize_cnj(raw_code)
