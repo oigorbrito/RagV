@@ -89,6 +89,7 @@ async def _set_process_secrecy(pool, *, stored_level: int, source_level: int | N
             "SELECT id FROM processes WHERE code=$1", CNJ
         )
         version_id = uuid4()
+        source_request_id = version_id.hex
         response_data = {"code": CNJ}
         if source_level is not None:
             response_data["secrecy_level"] = source_level
@@ -96,19 +97,19 @@ async def _set_process_secrecy(pool, *, stored_level: int, source_level: int | N
             "event_type": "response_created",
             "callback_id": f"datajud-test-{version_id}",
             "payload": {
-                "request_id": f"datajud-test-{version_id}",
-                "response_id": f"datajud-test-{version_id}",
+                "request_id": source_request_id,
+                "response_id": source_request_id,
                 "response_type": "lawsuit",
                 "response_data": response_data,
             },
         }
-        await conn.execute(  # nosec B608 - static SQL; all dynamic values are bound parameters.
+        await conn.execute(
             """INSERT INTO process_versions(
                    id,process_id,source_request_id,source_payload,finalized,finalized_at
                ) VALUES($1,$2,$3,$4::jsonb,TRUE,NOW())""",
             version_id,
             process_id,
-            f"datajud-test-{version_id}",
+            source_request_id,
             json.dumps(source_payload),
         )
         await conn.execute(
