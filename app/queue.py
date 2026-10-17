@@ -30,6 +30,13 @@ WHERE id = (
 RETURNING id, task_name, payload, attempts, max_attempts;
 """
 
+GET_IDEMPOTENT_JOB_SQL = """
+SELECT id, task_name, status::text AS status, payload
+FROM jobs
+WHERE idempotency_key = $1
+FOR SHARE;
+"""
+
 ENQUEUE_SQL = """
 INSERT INTO jobs (
     task_name, payload, priority, run_at, max_attempts, idempotency_key
@@ -149,6 +156,12 @@ async def enqueue(
         bounded_attempts,
         idempotency_key,
     )
+
+
+async def get_idempotent_job(
+    conn: asyncpg.Connection, idempotency_key: str
+) -> asyncpg.Record | None:
+    return await conn.fetchrow(GET_IDEMPOTENT_JOB_SQL, idempotency_key)
 
 
 async def claim(conn: asyncpg.Connection, worker_id: UUID) -> asyncpg.Record | None:

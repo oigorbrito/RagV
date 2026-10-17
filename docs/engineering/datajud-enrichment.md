@@ -23,13 +23,14 @@ not invalidate the Judit version.
 
 ## Authenticated UI lookup path
 
-The frontend submits `POST /processes/{cnj}/datajud` with a client-generated
-`Idempotency-Key`. The API authenticates the bearer/API key, applies its CNJ scope,
-and persists a `lookup_datajud_metadata` job in the PostgreSQL queue. The UI polls
-`GET /processes/{cnj}/datajud/jobs/{job_id}`; the job payload and result are only
-readable by the tenant that submitted that CNJ. Replays return the same job, while
-reusing a key for a different CNJ is rejected. Job results follow the configured
-job-retention policy.
+The frontend submits `POST /processes/datajud/jobs` with `{"code": "<cnj>"}` and
+a client-generated `Idempotency-Key`. The API authenticates the bearer/API key,
+applies its CNJ scope, and persists a `lookup_datajud_metadata` job in the
+PostgreSQL queue. The UI polls `POST /processes/datajud/jobs/status` with the CNJ
+and job ID; the job payload and result are only readable by the tenant that
+submitted that CNJ. Replays return the same job, while reusing a key for a
+different CNJ is rejected. Job results follow the configured job-retention policy.
+The `/processos` API aliases use the same contract.
 
 Only workers receive `DATAJUD_API_KEY` and perform provider requests. The API
 receives only the non-secret enablement/authorization flags and does not call the

@@ -18,6 +18,8 @@ from app.browser_origins import BrowserProcessCorsMiddleware
 from app.claim_evidence import claim_evidence_is_publishable, load_summary_claim_evidence
 from app.datajud_client import datajud_activation_status
 from app.datajud_jobs import (
+    DataJudJobStatusRequest,
+    DataJudJobSubmission,
     get_datajud_lookup,
     reject_synchronous_datajud_lookup,
     submit_datajud_lookup,
@@ -210,6 +212,16 @@ async def read_datajud_metadata_job(code: str, job_id: str, request: Request):
     except ValueError:
         raise HTTPException(status_code=404, detail="DataJud job not found") from None
     return await get_datajud_lookup(request, code, parsed_job_id)
+
+
+@app.post("/processes/datajud/jobs", status_code=202)
+async def enqueue_datajud_job(body: DataJudJobSubmission, request: Request):
+    return await submit_datajud_lookup(request, body.code)
+
+
+@app.post("/processes/datajud/jobs/status")
+async def poll_datajud_job(body: DataJudJobStatusRequest, request: Request):
+    return await get_datajud_lookup(request, body.code, body.job_id)
 
 
 @app.get("/ops/metrics")

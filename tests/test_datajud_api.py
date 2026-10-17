@@ -61,8 +61,9 @@ def test_datajud_submission_requires_explicit_activation_and_never_looks_up_inli
     monkeypatch.setenv("DATAJUD_AUTHORIZED_USE", "false")
     monkeypatch.setattr(app.state, "bearer_tokens", {token: uuid4()}, raising=False)
     response = TestClient(app).post(
-        f"/processes/{CNJ}/datajud",
+        "/processes/datajud/jobs",
         headers={"Authorization": f"Bearer {token}", "Idempotency-Key": "test-request-1"},
+        json={"code": CNJ},
     )
     assert response.status_code == 403  # nosec B101
     assert response.json()["detail"] == "DataJud desabilitado por padrão no servidor (DATAJUD_ENABLED=false)."  # nosec B101

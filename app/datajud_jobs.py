@@ -6,15 +6,29 @@ from uuid import UUID
 
 from fastapi import HTTPException, Request
 from fastapi.responses import JSONResponse
+from pydantic import BaseModel, ConfigDict
 
 from app.auth import principal_from_request
 from app.datajud_client import datajud_alias_from_cnj, datajud_activation_status
 from app.judit import normalize_cnj
 from app.json_utils import decode_json_object
-from app.queue import enqueue
+from app.queue import enqueue, get_idempotent_job
 
 DATAJUD_TASK = "lookup_datajud_metadata"
 _IDEMPOTENCY_RE = re.compile(r"[A-Za-z0-9._:-]{1,128}\Z")
+
+
+class DataJudJobSubmission(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    code: str
+
+
+class DataJudJobStatusRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    code: str
+    job_id: UUID
 
 
 def metadata_response(code: str, metadata: dict[str, Any]) -> dict[str, Any]:
@@ -90,10 +104,7 @@ async def submit_datajud_lookup(request: Request, raw_code: str) -> JSONResponse
             )
             created = row is not None
             if row is None:
-                row = await conn.fetchrow(  # nosec B608 - static SQL; the key is a bound $1 value
-                    "SELECT id, task_name, status::text AS status, payload FROM jobs WHERE idempotency_key=$1 FOR SHARE",
-                    idempotency_key,
-                )
+                row = await get_idempotent_job(conn, idempotency_key)
                 stored = (
                     decode_json_object(row["payload"], label="DataJud job payload")
                     if row is not None

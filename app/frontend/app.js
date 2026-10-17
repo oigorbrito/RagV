@@ -829,8 +829,10 @@ async function pollDataJudJob(code, token, searchId, attempt = 0) {
   if (!pending || pending.code !== code || pending.token !== token || !pending.jobId) return;
   setLoading(true);
   try {
-    const response = await fetch(apiUrl(`/processes/${encodeURIComponent(code)}/datajud/jobs/${encodeURIComponent(pending.jobId)}`), {
-      headers: authHeaders(token),
+    const response = await fetch(apiUrl('/processes/datajud/jobs/status'), {
+      method: 'POST',
+      headers: { ...authHeaders(token), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ code, job_id: pending.jobId }),
     });
     if (searchId !== currentSearchId) return;
     if (response.status === 401) {
@@ -921,9 +923,10 @@ async function searchProcess() {
     setLoading(true);
     setStatus('Consultando DataJud', 'Enviando a solicitação para processamento pelo worker.');
     try {
-      const djResp = await fetch(apiUrl(`/processes/${encodeURIComponent(code)}/datajud`), {
+      const djResp = await fetch(apiUrl('/processes/datajud/jobs'), {
         method: 'POST',
-        headers: { ...authHeaders(token), 'Idempotency-Key': pendingDataJudRequest.idempotencyKey },
+        headers: { ...authHeaders(token), 'Idempotency-Key': pendingDataJudRequest.idempotencyKey, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code }),
       });
       if (searchId !== currentSearchId) return;
       if (djResp.status === 401) {

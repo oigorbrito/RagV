@@ -999,13 +999,15 @@ await scenario("DataJud submits an idempotent job and renders its queued API res
   await ui.changeRadio("source-datajud");
   await ui.search();
   assert.equal(ui.requests[1].options.method, "POST");
-  assert.match(ui.requests[1].url, /\/datajud$/);
+  assert.equal(ui.requests[1].url, "/processes/datajud/jobs");
   assert.equal(ui.requests[1].options.headers.Authorization, `Bearer ${TOKEN}`);
   assert.match(ui.requests[1].options.headers["Idempotency-Key"], /^datajud-/);
-  assert.match(ui.requests[2].url, /\/datajud\/jobs\/9b765ab6-e6fa-4d9a-9943-22f24c516c08$/);
+  assert.deepEqual(JSON.parse(ui.requests[1].options.body), { code: VALID_CODE });
+  assert.equal(ui.requests[2].url, "/processes/datajud/jobs/status");
+  assert.deepEqual(JSON.parse(ui.requests[2].options.body), { code: VALID_CODE, job_id: "9b765ab6-e6fa-4d9a-9943-22f24c516c08" });
   assert.equal(ui.hasTimer(), true);
   await ui.tick();
-  assert.match(ui.requests[3].url, /\/datajud\/jobs\/9b765ab6-e6fa-4d9a-9943-22f24c516c08$/);
+  assert.equal(ui.requests[3].url, "/processes/datajud/jobs/status");
   assert.equal(ui.elements["result-code"].textContent, VALID_CODE);
   assert.equal(ui.elements["result-court"].textContent, "TJRS");
 });

@@ -20,6 +20,8 @@ from app.auth import principal_from_request, principal_from_request_unscoped, te
 from app.claim_evidence import claim_evidence_is_publishable, load_summary_claim_evidence
 from app.datajud_client import datajud_activation_status
 from app.datajud_jobs import (
+    DataJudJobStatusRequest,
+    DataJudJobSubmission,
     get_datajud_lookup,
     reject_synchronous_datajud_lookup,
     submit_datajud_lookup,
@@ -968,6 +970,18 @@ async def v1_reject_synchronous_datajud_metadata(code: str, request: Request):
 @router.post("/processos/{code}/datajud", status_code=202)
 async def v1_submit_datajud_metadata(code: str, request: Request):
     return await submit_datajud_lookup(request, code)
+
+
+@router.post("/v1/processos/datajud/jobs", status_code=202)
+@router.post("/processos/datajud/jobs", status_code=202)
+async def v1_enqueue_datajud_job(body: DataJudJobSubmission, request: Request):
+    return await submit_datajud_lookup(request, body.code)
+
+
+@router.post("/v1/processos/datajud/jobs/status")
+@router.post("/processos/datajud/jobs/status")
+async def v1_poll_datajud_job(body: DataJudJobStatusRequest, request: Request):
+    return await get_datajud_lookup(request, body.code, body.job_id)
 
 
 @router.get("/v1/processos/{code}/datajud/jobs/{job_id}")
