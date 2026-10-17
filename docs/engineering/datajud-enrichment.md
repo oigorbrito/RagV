@@ -40,6 +40,17 @@ the same job, while reusing a key for a different CNJ is rejected. Job results
 follow the configured job-retention policy. The `/processos` API aliases use the
 same contract.
 
+This route is currently an enrichment lookup for a process already present in
+RagV; it is not an independent first-acquisition path. A process must already be
+bound to the tenant and have a finalized current source version with an explicit,
+consistent secrecy value. A row whose `secrecy_level` merely defaults to zero, a
+user/operator assertion, a tenant binding, or DataJud's own public filtering does
+not establish that the process is public. The existing
+`acquisition_authorizations` contract is specifically for Judit `refresh` or
+`acquisition`; it does not attest to public classification and must not be reused
+as such. Without a trusted pre-query public-classification source, the request
+fails closed and no DataJud job is enqueued.
+
 Only workers receive `DATAJUD_API_KEY` and perform provider requests. The API
 receives only the non-secret enablement/authorization flags and does not call the
 DataJud adapter directly. Do not add API credentials or provider egress to the API

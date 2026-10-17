@@ -251,6 +251,62 @@ async def test_datajud_job_persists_result_is_idempotent_and_isolated(monkeypatc
 
 
 @pytest.mark.asyncio
+async def test_default_zero_without_judit_source_is_not_public(monkeypatch):
+    pool, tenants, tokens = await _setup(monkeypatch)
+    code_without_source = "0000000-00.2024.8.26.0102"
+    process_id = uuid4()
+    calls = 0
+
+    async def forbidden_lookup(**kwargs):
+        nonlocal calls
+        calls += 1
+        raise AssertionError("default secrecy zero is not proof of publication")
+
+    monkeypatch.setattr("app.datajud_tasks.lookup_datajud_metadata", forbidden_lookup)
+    monkeypatch.setenv("DATAJUD_API_KEY", "worker-only-test-key")
+    async with pool.acquire() as conn:
+        await conn.execute(
+            "INSERT INTO processes(id,code) VALUES($1,$2)",
+            process_id,
+            code_without_source,
+        )
+        await conn.execute(
+            "INSERT INTO tenant_processes(tenant_id,process_id) VALUES($1,$2)",
+            tenants[0],
+            process_id,
+        )
+
+    transport = httpx.ASGITransport(app=app)
+    try:
+        async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+            response = await _submit(
+                client,
+                "/processes/datajud/jobs",
+                {"Authorization": f"Bearer {tokens[0]}", "Idempotency-Key": "no-source"},
+                code=code_without_source,
+            )
+            assert response.status_code == 403  # nosec B101
+
+        async with pool.acquire() as conn:
+            assert await conn.fetchval("SELECT count(*) FROM jobs") == 0  # nosec B101
+            forged = await enqueue(
+                conn,
+                task_name=DATAJUD_TASK,
+                payload={"tenant_id": str(tenants[0]), "code": code_without_source},
+                idempotency_key="worker-no-source",
+            )
+        assert forged is not None  # nosec B101
+        assert await _worker(pool).process_one() is True  # nosec B101
+        async with pool.acquire() as conn:
+            status = await conn.fetchval(
+                "SELECT status::text FROM jobs WHERE id=$1", forged["id"]
+            )
+        assert status == "dead" and calls == 0  # nosec B101
+    finally:
+        await pool.close()
+
+
+@pytest.mark.asyncio
 async def test_secret_and_unknown_process_classification_fail_closed(monkeypatch):
     pool, tenants, tokens = await _setup(monkeypatch)
     calls = 0
@@ -354,7 +410,15 @@ async def test_datajud_disabled_rejects_without_enqueue_or_provider_call(monkeyp
                 "/processes/datajud/jobs",
                 {"Authorization": f"Bearer {tokens[0]}", "Idempotency-Key": "disabled"},
             )
-        assert response.status_code == 403  # nosec B101
+            assert response.status_code == 403  # nosec B101
+            monkeypatch.setenv("DATAJUD_ENABLED", "true")
+            monkeypatch.setenv("DATAJUD_AUTHORIZED_USE", "false")
+            unauthorized = await _submit(
+                client,
+                "/processes/datajud/jobs",
+                {"Authorization": f"Bearer {tokens[0]}", "Idempotency-Key": "not-authorized"},
+            )
+            assert unauthorized.status_code == 403  # nosec B101
         async with pool.acquire() as conn:
             assert await conn.fetchval("SELECT count(*) FROM jobs") == 0  # nosec B101
         assert calls == 0  # nosec B101
