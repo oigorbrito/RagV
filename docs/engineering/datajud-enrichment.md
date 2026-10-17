@@ -25,12 +25,20 @@ not invalidate the Judit version.
 
 The frontend submits `POST /processes/datajud/jobs` with `{"code": "<cnj>"}` and
 a client-generated `Idempotency-Key`. The API authenticates the bearer/API key,
-applies its CNJ scope, and persists a `lookup_datajud_metadata` job in the
-PostgreSQL queue. The UI polls `POST /processes/datajud/jobs/status` with the CNJ
-and job ID; the job payload and result are only readable by the tenant that
-submitted that CNJ. Replays return the same job, while reusing a key for a
-different CNJ is rejected. Job results follow the configured job-retention policy.
-The `/processos` API aliases use the same contract.
+requires the process to be bound to that tenant, and requires an explicit,
+consistent secrecy classification from the current finalized source version.
+Secret, unknown, inconsistent, or unauthorized process classifications are
+rejected before enqueue. The worker repeats the tenant binding and classification
+check immediately before provider execution; only a verified public level `0` is
+passed to the adapter. The DataJud API's own filters are not used as proof of
+RagV's internal secrecy classification.
+
+The API persists a `lookup_datajud_metadata` job in the PostgreSQL queue. The UI
+polls `POST /processes/datajud/jobs/status` with the CNJ and job ID; the job payload
+and result are only readable by the tenant that submitted that CNJ. Replays return
+the same job, while reusing a key for a different CNJ is rejected. Job results
+follow the configured job-retention policy. The `/processos` API aliases use the
+same contract.
 
 Only workers receive `DATAJUD_API_KEY` and perform provider requests. The API
 receives only the non-secret enablement/authorization flags and does not call the
@@ -41,7 +49,20 @@ closed and the API returns a generic unavailable response.
 
 ## Current public API contract
 
-Reviewed on 2026-09-17.
+Official example page checked on 2026-10-17: <https://datajud-wiki.cnj.jus.br/api-publica/exemplos/exemplo1/>.
+Its TRF1 request uses `POST /api_publica_trf1/_search` and the body:
+
+```json
+{"query":{"match":{"numeroProcesso":"00008323520184013202"}}}
+```
+
+The adapter's `match.numeroProcesso` query and normalized 20-digit CNJ match this
+example. The adapter additionally sends `size: 1` to bound the number of returned
+hits; the official example omits that option, but it is a standard `_search` body
+parameter. A synthetic transport test locks the example query and the `size: 1`
+limit. No real provider request was made for this validation. The response field
+`nivelSigilo` (if returned by DataJud) is not accepted as RagV's internal
+classification evidence.
 
 The CNJ public API uses tribunal-specific Elasticsearch-compatible endpoints:
 

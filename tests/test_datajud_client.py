@@ -133,6 +133,38 @@ async def test_datajud_lookup_parses_official_metadata_without_network(monkeypat
 
 
 @pytest.mark.asyncio
+async def test_lookup_matches_official_trf1_query_and_caps_hits_without_network(monkeypatch) -> None:
+    observed: dict[str, object] = {}
+
+    def fake_urlopen(request, timeout):
+        observed["url"] = request.full_url
+        observed["body"] = json.loads(request.data.decode("utf-8"))
+        return _Response({"hits": {"hits": []}})
+
+    monkeypatch.setattr(client, "urlopen", fake_urlopen)
+    result = await lookup_datajud_metadata(
+        code="00008323520184013202",
+        secrecy_level=0,
+        config=DataJudConfig(
+            enabled=True,
+            authorized_use=True,
+            api_key="synthetic-key",
+        ),
+    )
+
+    assert result.status == "not_found"
+    assert observed["url"] == (
+        "https://api-publica.datajud.cnj.jus.br/api_publica_trf1/_search"
+    )
+    assert observed["body"] == {
+        "size": 1,
+        "query": {
+            "match": {"numeroProcesso": "00008323520184013202"},
+        },
+    }
+
+
+@pytest.mark.asyncio
 async def test_datajud_lookup_is_disabled_and_secret_safe_without_transport(monkeypatch) -> None:
     def forbidden(*args, **kwargs):
         raise AssertionError("transport must not be called")

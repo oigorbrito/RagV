@@ -11,8 +11,17 @@ from app.judit import normalize_cnj
 async def lookup_datajud_metadata_task(payload: dict[str, Any]) -> dict[str, Any]:
     tenant_id = payload.get("tenant_id")
     raw_code = payload.get("code")
-    if not isinstance(tenant_id, str) or not isinstance(raw_code, str):
+    raw_secrecy_level = payload.get("secrecy_level")
+    if (
+        not isinstance(tenant_id, str)
+        or not isinstance(raw_code, str)
+        or isinstance(raw_secrecy_level, bool)
+        or not isinstance(raw_secrecy_level, int)
+        or raw_secrecy_level < 0
+    ):
         raise PermanentTaskError("Invalid DataJud job payload")
+    if raw_secrecy_level > 0:
+        return {"status": "skipped_secrecy"}
     try:
         code = normalize_cnj(raw_code)
         config = datajud_config()
@@ -23,7 +32,7 @@ async def lookup_datajud_metadata_task(payload: dict[str, Any]) -> dict[str, Any
 
     result = await lookup_datajud_metadata(
         code=code,
-        secrecy_level=0,
+        secrecy_level=raw_secrecy_level,
         config=config,
     )
     metadata = result.metadata

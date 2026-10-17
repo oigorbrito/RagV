@@ -10,6 +10,11 @@ from pydantic import BaseModel, ConfigDict
 
 from app.auth import principal_from_request
 from app.datajud_client import datajud_alias_from_cnj, datajud_activation_status
+from app.datajud_security import (
+    DataJudProcessNotAuthorized,
+    DataJudProcessNotPublic,
+    require_public_datajud_process,
+)
 from app.judit import normalize_cnj
 from app.json_utils import decode_json_object
 from app.queue import enqueue, get_idempotent_job
@@ -63,6 +68,18 @@ async def _tenant_id(request: Request, code: str) -> UUID:
     return principal.tenant_id
 
 
+async def _authorize_public_process(conn, *, tenant_id: UUID, code: str) -> None:
+    try:
+        await require_public_datajud_process(conn, tenant_id=tenant_id, code=code)
+    except DataJudProcessNotAuthorized as exc:
+        raise HTTPException(status_code=404, detail="DataJud process not found") from exc
+    except DataJudProcessNotPublic as exc:
+        raise HTTPException(
+            status_code=403,
+            detail="DataJud lookup requires a verified public process",
+        ) from exc
+
+
 async def reject_synchronous_datajud_lookup(request: Request, raw_code: str) -> None:
     try:
         code = normalize_cnj(raw_code)
@@ -96,22 +113,34 @@ async def submit_datajud_lookup(request: Request, raw_code: str) -> JSONResponse
     payload = {"tenant_id": str(tenant_id), "code": code}
     async with pool.acquire() as conn:
         async with conn.transaction():
-            row = await enqueue(
-                conn,
-                task_name=DATAJUD_TASK,
-                payload=payload,
-                idempotency_key=idempotency_key,
-            )
-            created = row is not None
-            if row is None:
-                row = await get_idempotent_job(conn, idempotency_key)
-                stored = (
-                    decode_json_object(row["payload"], label="DataJud job payload")
-                    if row is not None
-                    else {}
-                )
+            row = await get_idempotent_job(conn, idempotency_key)
+            if row is not None:
+                stored = decode_json_object(row["payload"], label="DataJud job payload")
+                if row["task_name"] != DATAJUD_TASK:
+                    raise HTTPException(status_code=503, detail="Queue unavailable")
+                if stored.get("tenant_id") != str(tenant_id) or stored.get("code") != code:
+                    raise HTTPException(status_code=409, detail="Idempotency-Key was used for a different request")
+                created = False
             else:
                 stored = payload
+                created = False
+
+            await _authorize_public_process(conn, tenant_id=tenant_id, code=code)
+            if row is None:
+                row = await enqueue(
+                    conn,
+                    task_name=DATAJUD_TASK,
+                    payload=payload,
+                    idempotency_key=idempotency_key,
+                )
+                created = row is not None
+                if row is None:
+                    row = await get_idempotent_job(conn, idempotency_key)
+                    stored = (
+                        decode_json_object(row["payload"], label="DataJud job payload")
+                        if row is not None
+                        else {}
+                    )
             if row is None or row["task_name"] != DATAJUD_TASK:
                 raise HTTPException(status_code=503, detail="Queue unavailable")
             if stored.get("tenant_id") != str(tenant_id) or stored.get("code") != code:
@@ -132,6 +161,7 @@ async def get_datajud_lookup(request: Request, raw_code: str, job_id: UUID) -> J
     if pool is None:
         raise HTTPException(status_code=503, detail="Queue unavailable")
     async with pool.acquire() as conn:
+        await _authorize_public_process(conn, tenant_id=tenant_id, code=code)
         row = await conn.fetchrow(
             """SELECT status::text AS status, payload, result FROM jobs
                WHERE id=$1 AND task_name=$2 AND payload->>'tenant_id'=$3 AND payload->>'code'=$4""",

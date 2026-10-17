@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import os
 from uuid import uuid4
 
@@ -9,8 +10,10 @@ import pytest
 from app.api import app
 from app.datajud_client import DataJudLookupResult
 from app.datajud_enrichment import DataJudMetadata
+from app.datajud_jobs import DATAJUD_TASK
 from app.db import create_pool
 from app.migrations import migrate
+from app.queue import enqueue
 from app.worker import Worker, WorkerSettings
 
 TEST_DATABASE_URL = os.getenv("TEST_DATABASE_URL")
@@ -23,12 +26,46 @@ async def _setup(monkeypatch):
     await migrate(TEST_DATABASE_URL)
     pool = await create_pool(TEST_DATABASE_URL, min_size=1, max_size=4)
     async with pool.acquire() as conn:
-        await conn.execute("TRUNCATE jobs, tenants RESTART IDENTITY CASCADE")
+        await conn.execute("TRUNCATE jobs, tenants, processes RESTART IDENTITY CASCADE")
     tenants = [uuid4(), uuid4()]
     tokens = [f"datajud-{uuid4()}", f"datajud-{uuid4()}"]
+    process_id, version_id = uuid4(), uuid4()
+    source_payload = {
+        "event_type": "response_created",
+        "callback_id": "datajud-test-callback",
+        "payload": {
+            "request_id": "datajud-test-request",
+            "response_id": "datajud-test-response",
+            "response_type": "lawsuit",
+            "response_data": {"code": CNJ, "secrecy_level": 0},
+        },
+    }
     async with pool.acquire() as conn:
-        for index, tenant_id in enumerate(tenants):
+        for tenant_id in tenants:
             await conn.execute("INSERT INTO tenants(id,name) VALUES($1,$2)", tenant_id, "DataJud tenant")
+        await conn.execute(
+            "INSERT INTO processes(id,code,secrecy_level) VALUES($1,$2,0)",
+            process_id,
+            CNJ,
+        )
+        await conn.execute(
+            """INSERT INTO process_versions(
+                   id,process_id,source_request_id,source_payload,finalized,finalized_at
+               ) VALUES($1,$2,'datajud-test-request',$3::jsonb,TRUE,NOW())""",
+            version_id,
+            process_id,
+            json.dumps(source_payload),
+        )
+        await conn.execute(
+            "UPDATE processes SET current_version_id=$1 WHERE id=$2",
+            version_id,
+            process_id,
+        )
+        await conn.execute(
+            "INSERT INTO tenant_processes(tenant_id,process_id) VALUES($1,$2)",
+            tenants[0],
+            process_id,
+        )
     monkeypatch.setattr(app.state, "bearer_tokens", dict(zip(tokens, tenants)), raising=False)
     monkeypatch.setattr(app.state, "pool", pool, raising=False)
     monkeypatch.setenv("DATABASE_URL", TEST_DATABASE_URL)
@@ -44,6 +81,42 @@ async def _submit(client, path, headers, code=CNJ):
 
 async def _status(client, path, headers, code, job_id):
     return await client.post(path, headers=headers, json={"code": code, "job_id": str(job_id)})
+
+
+async def _set_process_secrecy(pool, *, stored_level: int, source_level: int | None):
+    async with pool.acquire() as conn:
+        process_id = await conn.fetchval(
+            "SELECT id FROM processes WHERE code=$1", CNJ
+        )
+        version_id = uuid4()
+        response_data = {"code": CNJ}
+        if source_level is not None:
+            response_data["secrecy_level"] = source_level
+        source_payload = {
+            "event_type": "response_created",
+            "callback_id": f"datajud-test-{version_id}",
+            "payload": {
+                "request_id": f"datajud-test-{version_id}",
+                "response_id": f"datajud-test-{version_id}",
+                "response_type": "lawsuit",
+                "response_data": response_data,
+            },
+        }
+        await conn.execute(
+            """INSERT INTO process_versions(
+                   id,process_id,source_request_id,source_payload,finalized,finalized_at
+               ) VALUES($1,$2,$3,$4::jsonb,TRUE,NOW())""",
+            version_id,
+            process_id,
+            f"datajud-test-{version_id}",
+            json.dumps(source_payload),
+        )
+        await conn.execute(
+            "UPDATE processes SET secrecy_level=$1,current_version_id=$2 WHERE id=$3",
+            stored_level,
+            version_id,
+            process_id,
+        )
 
 
 def _worker(pool):
@@ -85,6 +158,7 @@ async def test_datajud_job_persists_result_is_idempotent_and_isolated(monkeypatc
 
     async def fake_lookup(*, code, secrecy_level, config):
         calls.append((code, secrecy_level))
+        assert secrecy_level == 0  # nosec B101
         assert config.api_key == "worker-only-test-key"  # nosec B101
         return DataJudLookupResult(
             status="ok",
@@ -122,8 +196,8 @@ async def test_datajud_job_persists_result_is_idempotent_and_isolated(monkeypatc
                 "/processes/datajud/jobs",
                 {"Authorization": f"Bearer {tokens[1]}", "Idempotency-Key": "request-1"},
             )
-            assert other.status_code == 202  # nosec B101
-            assert other.json()["job_id"] != first.json()["job_id"]  # nosec B101
+            assert other.status_code == 404  # nosec B101
+            assert other.json()["detail"] == "DataJud process not found"  # nosec B101
 
             unknown = await _submit(
                 client,
@@ -168,10 +242,122 @@ async def test_datajud_job_persists_result_is_idempotent_and_isolated(monkeypatc
                 "subjects": [{"code": "456", "name": "Assunto de teste"}],
                 "parties": [],
             }
-            assert len(calls) == 1  # nosec B101
+            assert calls == [(CNJ, 0)]  # nosec B101
             async with pool.acquire() as conn:
                 row = await conn.fetchrow("SELECT status::text AS status, result FROM jobs WHERE id=$1", first.json()["job_id"])
             assert row and row["status"] == "completed" and row["result"]["status"] == "ok"  # nosec B101
+    finally:
+        await pool.close()
+
+
+@pytest.mark.asyncio
+async def test_secret_and_unknown_process_classification_fail_closed(monkeypatch):
+    pool, tenants, tokens = await _setup(monkeypatch)
+    calls = 0
+
+    async def forbidden_lookup(**kwargs):
+        nonlocal calls
+        calls += 1
+        raise AssertionError("unverified process must not reach the provider")
+
+    monkeypatch.setattr("app.datajud_tasks.lookup_datajud_metadata", forbidden_lookup)
+    transport = httpx.ASGITransport(app=app)
+    try:
+        async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+            headers = {"Authorization": f"Bearer {tokens[0]}", "Idempotency-Key": "secret-process"}
+            await _set_process_secrecy(pool, stored_level=1, source_level=1)
+            secret = await _submit(client, "/processes/datajud/jobs", headers)
+            assert secret.status_code == 403  # nosec B101
+
+            await _set_process_secrecy(pool, stored_level=0, source_level=None)
+            unknown = await _submit(
+                client,
+                "/processes/datajud/jobs",
+                {"Authorization": f"Bearer {tokens[0]}", "Idempotency-Key": "unknown-process"},
+            )
+            assert unknown.status_code == 403  # nosec B101
+        async with pool.acquire() as conn:
+            assert await conn.fetchval("SELECT count(*) FROM jobs") == 0  # nosec B101
+        assert calls == 0  # nosec B101
+    finally:
+        await pool.close()
+
+
+@pytest.mark.asyncio
+async def test_worker_rechecks_secrecy_and_tenant_authorization_before_provider(monkeypatch):
+    pool, tenants, tokens = await _setup(monkeypatch)
+    calls = 0
+
+    async def forbidden_lookup(**kwargs):
+        nonlocal calls
+        calls += 1
+        raise AssertionError("unauthorized process must not reach the provider")
+
+    monkeypatch.setattr("app.datajud_tasks.lookup_datajud_metadata", forbidden_lookup)
+    monkeypatch.setenv("DATAJUD_API_KEY", "worker-only-test-key")
+    transport = httpx.ASGITransport(app=app)
+    try:
+        async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+            accepted = await _submit(
+                client,
+                "/processes/datajud/jobs",
+                {"Authorization": f"Bearer {tokens[0]}", "Idempotency-Key": "race-to-secret"},
+            )
+            assert accepted.status_code == 202  # nosec B101
+            await _set_process_secrecy(pool, stored_level=1, source_level=1)
+            assert await _worker(pool).process_one() is True  # nosec B101
+
+            unauthorized = await _submit(
+                client,
+                "/processes/datajud/jobs",
+                {"Authorization": f"Bearer {tokens[1]}", "Idempotency-Key": "wrong-tenant"},
+            )
+            assert unauthorized.status_code == 404  # nosec B101
+
+        await _set_process_secrecy(pool, stored_level=0, source_level=0)
+        async with pool.acquire() as conn:
+            forged = await enqueue(
+                conn,
+                task_name=DATAJUD_TASK,
+                payload={"tenant_id": str(tenants[1]), "code": CNJ},
+                idempotency_key="forged-wrong-tenant",
+            )
+        assert forged is not None  # nosec B101
+        assert await _worker(pool).process_one() is True  # nosec B101
+        async with pool.acquire() as conn:
+            statuses = await conn.fetch(
+                "SELECT status::text AS status FROM jobs ORDER BY created_at"
+            )
+        assert [row["status"] for row in statuses] == ["dead", "dead"]  # nosec B101
+        assert calls == 0  # nosec B101
+    finally:
+        await pool.close()
+
+
+@pytest.mark.asyncio
+async def test_datajud_disabled_rejects_without_enqueue_or_provider_call(monkeypatch):
+    pool, tenants, tokens = await _setup(monkeypatch)
+    calls = 0
+
+    async def forbidden_lookup(**kwargs):
+        nonlocal calls
+        calls += 1
+        raise AssertionError("disabled DataJud must not reach the provider")
+
+    monkeypatch.setattr("app.datajud_tasks.lookup_datajud_metadata", forbidden_lookup)
+    monkeypatch.setenv("DATAJUD_ENABLED", "false")
+    transport = httpx.ASGITransport(app=app)
+    try:
+        async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+            response = await _submit(
+                client,
+                "/processes/datajud/jobs",
+                {"Authorization": f"Bearer {tokens[0]}", "Idempotency-Key": "disabled"},
+            )
+        assert response.status_code == 403  # nosec B101
+        async with pool.acquire() as conn:
+            assert await conn.fetchval("SELECT count(*) FROM jobs") == 0  # nosec B101
+        assert calls == 0  # nosec B101
     finally:
         await pool.close()
 
