@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 import json
-from urllib.error import HTTPError
+import logging
+from urllib.error import HTTPError, URLError
 
 import pytest
 
@@ -258,6 +259,61 @@ async def test_datajud_rejects_oversized_response_before_decode(monkeypatch) -> 
         raise AssertionError(f"unexpected status: {result.status}")
     if result.error_code != "response_too_large":
         raise AssertionError(f"unexpected error code: {result.error_code}")
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("failure_stage", "expected_exception", "expected_cause"),
+    [
+        ("opening_response", "URLError", "TimeoutError"),
+        ("reading_response_body", "TimeoutError", "none"),
+    ],
+)
+async def test_datajud_transport_error_logs_sanitized_diagnostics(
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+    failure_stage: str,
+    expected_exception: str,
+    expected_cause: str,
+) -> None:
+    sensitive_text = "CNJ=00000000000000000000 Authorization=APIKey secret-value"
+
+    class TimeoutResponse(_Response):
+        def read(self, amount: int = -1) -> bytes:
+            raise TimeoutError(sensitive_text)
+
+    def failing(request, timeout):
+        if failure_stage == "opening_response":
+            raise URLError(TimeoutError(sensitive_text))
+        return TimeoutResponse({})
+
+    monkeypatch.setattr(client, "urlopen", failing)
+    with caplog.at_level(logging.WARNING, logger=client.__name__):
+        result = await lookup_datajud_metadata(
+            code="0000000-00.2026.8.21.0001",
+            secrecy_level=0,
+            config=DataJudConfig(
+                enabled=True,
+                authorized_use=True,
+                api_key="secret-value",
+                timeout_seconds=3.5,
+            ),
+        )
+
+    assert result.status == "unavailable"
+    assert result.error_code == "transport_error"
+    records = [record for record in caplog.records if record.name == client.__name__]
+    assert len(records) == 1
+    message = records[0].getMessage()
+    assert f"stage={failure_stage}" in message
+    assert "timeout_seconds=3.500" in message
+    assert f"exception_class={expected_exception}" in message
+    assert f"cause_class={expected_cause}" in message
+    attempt = message.split("attempt_id=", 1)[1].split(" ", 1)[0]
+    assert len(attempt) == 32
+    int(attempt, 16)
+    assert sensitive_text not in message
+    assert "secret-value" not in message
 
 
 class _RawDataJudResponse:
