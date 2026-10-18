@@ -65,7 +65,10 @@ class HomologationPackageTests(unittest.TestCase):
 
     def test_datajud_configurator_uses_cnj_and_recreates_only_homologation_services(self):
         text = (ROOT / "packaging/windows/configurar-datajud.ps1").read_text(encoding="utf-8-sig")
-        self.assertIn("https://www.cnj.jus.br/sistemas/datajud/api-publica/", text)
+        self.assertIn("https://datajud-wiki.cnj.jus.br/api-publica/acesso/", text)
+        self.assertIn("Get-OfficialDataJudApiKey", text)
+        self.assertIn("Wait-DataJudCapabilities", text)
+        self.assertIn("ResponseUri", text)
         self.assertIn("DATAJUD_AUTHORIZED_USE=true", text)
         self.assertIn("worker-1','worker-2','scheduler", text)
         self.assertNotIn("postgres", text.split("Invoke-HmlDocker", 1)[-1])

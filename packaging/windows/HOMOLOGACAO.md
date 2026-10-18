@@ -19,7 +19,7 @@ O perfil `%LOCALAPPDATA%\RagV-Homologacao` guarda `.env`, o token padrão de tes
 ## Configurar DataJud sem terminal
 
 1. Confirme que sua finalidade e seu uso são autorizados pelas regras atuais do CNJ.
-2. Na tela **Configurar acesso**, quando o backend informar que o DataJud está indisponível, clique em **Configurar DataJud**; o mesmo fluxo também está disponível no atalho **Configurar DataJud - RagV Homologação**. O link aponta para a fonte oficial: <https://www.cnj.jus.br/sistemas/datajud/api-publica/>. Obtenha a chave vigente manualmente; o RagV não faz consultas automáticas na instalação.
+2. Na tela **Configurar acesso**, quando o backend informar que o DataJud está indisponível, clique em **Configurar DataJud**; o mesmo fluxo também está disponível no atalho **Configurar DataJud - RagV Homologação**. O link aponta para a fonte oficial: <https://datajud-wiki.cnj.jus.br/api-publica/acesso/>. Use **Obter chave oficial** para ler a chave vigente diretamente da documentação oficial; essa etapa não faz consultas processuais.
 3. Cole a chave no campo mascarado, marque a confirmação de uso autorizado e clique **Salvar e ativar**. A chave fica restrita aos workers; API, scheduler e desktop não a recebem. Não é necessária chave Judit.
 4. Após salvar com a confirmação explícita, a API e os workers são recriados no projeto de homologação; a interface reconsulta `/capabilities` e só então libera o seletor DataJud. Nenhuma consulta paga ou processual é feita pelo configurador.
 
