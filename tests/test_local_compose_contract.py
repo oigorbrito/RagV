@@ -32,6 +32,15 @@ def test_local_ports_are_loopback_only_and_postgres_password_is_required() -> No
     _require("POSTGRES_PASSWORD:?" in compose, "new local databases must require an explicit PostgreSQL password")
 
 
+def test_offline_smokes_supply_disposable_database_credentials() -> None:
+    shell = (ROOT / "scripts" / "smoke_offline.sh").read_text(encoding="utf-8")
+    powershell = (ROOT / "scripts" / "smoke_offline.ps1").read_text(encoding="utf-8-sig")
+    _require("secrets.token_hex(32)" in shell, "shell smoke must generate a throwaway password")
+    _require("RandomNumberGenerator]::GetBytes(32)" in powershell, "PowerShell smoke must generate a throwaway password")
+    _require("${POSTGRES_PASSWORD}" in shell, "shell smoke DATABASE_URL must match PostgreSQL password")
+    _require("$($env:POSTGRES_PASSWORD)" in powershell, "PowerShell smoke DATABASE_URL must match PostgreSQL password")
+
+
 def test_local_judit_credentials_and_callback_are_worker_only() -> None:
     compose = (ROOT / "compose.yaml").read_text(encoding="utf-8")
     for service in ("worker-1", "worker-2"):
