@@ -26,7 +26,10 @@ try {
     $repoMount = "${repo}:/work:ro"
     $backupMount = "${backupDirectory}:/backup"
     docker compose run --rm --no-deps -v $repoMount -v $backupMount --entrypoint sh postgres -c 'DATABASE_URL="postgresql://rpy:$POSTGRES_PASSWORD@postgres:5432/rpy" sh /work/scripts/backup_database.sh "/backup/$1"' sh $backupName
-    if ($LASTEXITCODE -ne 0) { throw "Backup ou validação falhou; atualização cancelada." }
+    if ($LASTEXITCODE -ne 0) {
+        Remove-Item -LiteralPath $backupFullPath, "$backupFullPath.sha256" -Force -ErrorAction SilentlyContinue
+        throw "Backup ou validação falhou; atualização cancelada."
+    }
 
     # Um único conjunto versionado: migração, API (inclui frontend), workers e scheduler.
     docker compose build migrate api worker-1 worker-2 scheduler
