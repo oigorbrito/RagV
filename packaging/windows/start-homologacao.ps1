@@ -2,6 +2,7 @@
 . (Join-Path $PSScriptRoot 'homologacao-common.ps1')
 Add-Type -AssemblyName System.Windows.Forms
 $progress = $null
+$script:HmlDefaultToken = 'ragv-hml-local-test-2026'
 try {
     Initialize-HmlPaths
     $progress = New-Object Windows.Forms.Form
@@ -27,7 +28,7 @@ try {
         $listener = [Net.Sockets.TcpListener]::new([Net.IPAddress]::Loopback, 18080)
         try { $listener.Start() } catch { $listener = [Net.Sockets.TcpListener]::new([Net.IPAddress]::Loopback, 0); $listener.Start() }
         try { $port = ([Net.IPEndPoint]$listener.LocalEndpoint).Port } finally { $listener.Stop() }
-        $token = New-HmlSecret
+        $token = $script:HmlDefaultToken
         $tenant = [guid]::NewGuid().ToString()
         $projectName = 'ragv-hml-' + [guid]::NewGuid().ToString('N').Substring(0,12)
         $newEnv = "$($script:HmlEnv).new"
@@ -53,9 +54,10 @@ try {
         Move-Item -LiteralPath $newEnv -Destination $script:HmlEnv
     }
     $settings = Get-HmlSettings
-    Ensure-HmlPassword
     $mapping = $settings.RPY_BEARER_TOKENS | ConvertFrom-Json
-    $env:RPY_DESKTOP_TOKEN = [string]$mapping.PSObject.Properties[0].Name
+    $env:RPY_DESKTOP_TOKEN = $script:HmlDefaultToken
+    $env:RPY_HOMOLOGATION_MODE = 'true'
+    $env:RPY_HOMOLOGATION_BIND_ADDRESS = '127.0.0.1'
     $compose = Get-HmlComposeArgs $settings
     $metadata = Get-Content (Join-Path $script:HmlRuntime 'HOMOLOGACAO.txt') -Encoding UTF8
     $packageSha = (($metadata | Where-Object { $_ -like 'Package SHA: *' }) -replace '^Package SHA: ', '')

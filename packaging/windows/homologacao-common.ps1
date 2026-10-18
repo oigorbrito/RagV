@@ -3,6 +3,7 @@ $script:HmlRoot = Join-Path $env:LOCALAPPDATA 'RagV-Homologacao'
 $script:HmlRuntime = Join-Path $PSScriptRoot 'runtime'
 $script:HmlEnv = Join-Path $script:HmlRoot '.env'
 $script:HmlStage = 'pré-requisitos'
+$script:HmlDefaultToken = 'ragv-hml-local-test-2026'
 
 function Set-HmlPrivatePath([string]$Path) {
     $item = Get-Item -LiteralPath $Path
@@ -88,8 +89,14 @@ function Initialize-HmlPaths {
 function Get-HmlSettings {
     $settings=@{}; foreach($line in (Get-Content $script:HmlEnv)){if($line -match '^([A-Z][A-Z0-9_]*)=(.*)$'){$settings[$matches[1]]=$matches[2]}}
     if($settings.COMPOSE_PROJECT_NAME -notmatch '^ragv-hml-[a-f0-9]{12}$'){throw 'Identificador de homologação inválido.'}; $port=0;if(-not[int]::TryParse($settings.RPY_API_PORT,[ref]$port)-or$port-lt1024-or$port-gt65535){throw 'Porta local inválida.'}
-    try{$mapping=$settings.RPY_BEARER_TOKENS|ConvertFrom-Json;$entries=@($mapping.PSObject.Properties);$tenant=[guid]::Empty;if($entries.Count-ne 1-or$entries[0].Name.Length-lt32-or-not[guid]::TryParse([string]$entries[0].Value,[ref]$tenant)){throw 'invalid'}}catch{throw 'Bearer/tenant local inválido.'}
-    $tokenFile=Join-Path $script:HmlRoot 'access-token.txt';if((Test-Path $tokenFile)-and((Get-Content $tokenFile -Raw).Trim()-cne$entries[0].Name)){Set-Content $tokenFile $entries[0].Name -Encoding ASCII;Set-HmlPrivatePath $tokenFile};return $settings
+    try{$mapping=$settings.RPY_BEARER_TOKENS|ConvertFrom-Json;$entries=@($mapping.PSObject.Properties);$tenant=[guid]::Empty;if($entries.Count-ne 1-or-not[guid]::TryParse([string]$entries[0].Value,[ref]$tenant)){throw 'invalid'}}catch{throw 'Bearer/tenant local inválido.'}
+    if($entries[0].Name -cne $script:HmlDefaultToken){
+        $settings.RPY_BEARER_TOKENS = (@{$script:HmlDefaultToken=$tenant.ToString()} | ConvertTo-Json -Compress)
+        $lines=Get-Content -LiteralPath $script:HmlEnv | Where-Object {$_ -notmatch '^RPY_BEARER_TOKENS='}
+        @($lines + "RPY_BEARER_TOKENS=$($settings.RPY_BEARER_TOKENS)") | Set-Content -LiteralPath $script:HmlEnv -Encoding ASCII
+        Set-HmlPrivatePath $script:HmlEnv
+    }
+    $tokenFile=Join-Path $script:HmlRoot 'access-token.txt';if((Test-Path $tokenFile)-and((Get-Content $tokenFile -Raw).Trim()-cne$script:HmlDefaultToken)){Set-Content $tokenFile $script:HmlDefaultToken -Encoding ASCII;Set-HmlPrivatePath $tokenFile};return $settings
 }
 function Write-HmlEvent([string]$Stage,[int]$Code){$event=@{at=[DateTime]::UtcNow.ToString('o');stage=$Stage;exit_code=$Code;ps_version=$PSVersionTable.PSVersion.ToString()};Add-Content (Join-Path $script:HmlRoot 'startup.jsonl') ($event|ConvertTo-Json -Compress) -Encoding UTF8}
 function Invoke-HmlDocker([string]$Stage,[string[]]$DockerArgs){$script:HmlStage=$Stage;if($script:HmlStatusLabel){$script:HmlStatusLabel.Text=$Stage;[Windows.Forms.Application]::DoEvents()};$start=New-Object Diagnostics.ProcessStartInfo;$start.FileName=(Get-Command docker.exe).Source;$start.Arguments=(($DockerArgs|ForEach-Object{'"'+$_.Replace('"','\"')+'"'})-join' ');$start.UseShellExecute=$false;$start.CreateNoWindow=$true;$start.RedirectStandardOutput=$true;$start.RedirectStandardError=$true;$p=New-Object Diagnostics.Process;$p.StartInfo=$start;$p.Start()|Out-Null;$stdout=$p.StandardOutput.ReadToEndAsync();$stderr=$p.StandardError.ReadToEndAsync();while(-not$p.WaitForExit(100)){if($script:HmlStatusLabel){[Windows.Forms.Application]::DoEvents()}};$out=$stdout.GetAwaiter().GetResult();$null=$stderr.GetAwaiter().GetResult();$code=$p.ExitCode;$p.Dispose();Write-HmlEvent $Stage $code;if($code-ne 0){throw "A etapa '$Stage' falhou (código $code). Veja startup.jsonl."};return $out}

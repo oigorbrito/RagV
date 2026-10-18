@@ -33,14 +33,12 @@ Source: "..\..\dist\RagVDesktop.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "start-homologacao.ps1"; DestDir: "{app}"; Flags: ignoreversion
 Source: "homologacao-common.ps1"; DestDir: "{app}"; Flags: ignoreversion
 Source: "configurar-datajud.ps1"; DestDir: "{app}"; Flags: ignoreversion
-Source: "redefinir-senha.ps1"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\..\_homologation-payload\project\*"; DestDir: "{#ProjectDir}"; Flags: recursesubdirs createallsubdirs ignoreversion
 Source: "HOMOLOGACAO.md"; DestDir: "{app}"; Flags: ignoreversion
 
 [Icons]
 Name: "{autoprograms}\RagV Homologação"; Filename: "{#PowerShellExe}"; Parameters: "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File ""{app}\start-homologacao.ps1"""; WorkingDir: "{app}"
 Name: "{autoprograms}\Configurar DataJud - RagV Homologação"; Filename: "{#PowerShellExe}"; Parameters: "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File ""{app}\configurar-datajud.ps1"""; WorkingDir: "{app}"
-Name: "{autoprograms}\Redefinir senha local - RagV Homologação"; Filename: "{#PowerShellExe}"; Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\redefinir-senha.ps1"""; WorkingDir: "{app}"
 
 [Run]
 Filename: "{#PowerShellExe}"; Parameters: "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File ""{app}\start-homologacao.ps1"""; Description: "Abrir RagV Homologação"; Flags: postinstall skipifsilent unchecked
@@ -54,8 +52,7 @@ begin
     if not FileExists(ExpandConstant('{app}\runtime\compose.yaml')) or
        not FileExists(ExpandConstant('{app}\runtime\HOMOLOGACAO.txt')) or
        not FileExists(ExpandConstant('{app}\runtime\scripts\bootstrap_homologation.py')) or
-       not FileExists(ExpandConstant('{app}\homologacao-common.ps1')) or
-       not FileExists(ExpandConstant('{app}\redefinir-senha.ps1')) then
+       not FileExists(ExpandConstant('{app}\homologacao-common.ps1')) then
       RaiseException('A instalação está incompleta. Não abra o aplicativo; reinstale o pacote de homologação.');
   end;
 end;

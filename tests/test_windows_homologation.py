@@ -19,6 +19,8 @@ class HomologationPackageTests(unittest.TestCase):
         self.assertIn('_homologation-payload\\project\\*', text)
         self.assertIn("CurStep = ssPostInstall", text)
         self.assertIn("PrivilegesRequired=lowest", text)
+        self.assertNotIn("redefinir-senha.ps1", text)
+        self.assertNotIn("Redefinir senha local", text)
 
     def test_windows_scripts_are_utf8_bom(self):
         for path in (ROOT / "packaging/windows").glob("*.ps1"):
@@ -47,6 +49,8 @@ class HomologationPackageTests(unittest.TestCase):
         self.assertIn("'--no-build'", text)
         self.assertIn("'exec','-T','api','python','scripts/bootstrap_homologation.py'", text)
         self.assertIn("$report.tenant_exists", text)
+        self.assertIn("ragv-hml-local-test-2026", text)
+        self.assertNotIn("Ensure-HmlPassword", text)
         self.assertLess(text.index("if (-not $ready)"), text.index("$tenantReport ="))
 
     def test_overlay_has_no_postgres_publication_and_loopback_api(self):
@@ -54,6 +58,8 @@ class HomologationPackageTests(unittest.TestCase):
         self.assertIn("ports: !reset []", text)
         self.assertIn("ports: !override", text)
         self.assertIn("127.0.0.1:${RPY_API_PORT:-18080}:8000", text)
+        self.assertIn("RPY_HOMOLOGATION_MODE", text)
+        self.assertIn("RPY_HOMOLOGATION_BIND_ADDRESS", text)
         self.assertNotIn("ragv_rpy_pgdata", text)
 
     def test_package_has_allowlisted_sources_and_explicit_sha(self):
