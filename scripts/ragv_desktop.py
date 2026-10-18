@@ -41,10 +41,11 @@ def _inject_managed_token(window):
     if not token:
         return
     script = (
-        "(() => { const input = document.querySelector('#bearer-token'); "
+        "(() => { const apply = () => { const input = document.querySelector('#bearer-token'); "
         "const button = document.querySelector('#verify-token'); "
         f"if (input && button) {{ input.value = {json.dumps(token)}; "
-        "input.dispatchEvent(new Event('input', {bubbles:true})); button.click(); }} })()"
+        "input.dispatchEvent(new Event('input', {bubbles:true})); button.click(); } "
+        "else { setTimeout(apply, 200); } }; setTimeout(apply, 300); })()"
     )
     try:
         window.evaluate_js(script)
