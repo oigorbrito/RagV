@@ -8,13 +8,13 @@ Windows 10/11 x64, WebView2 Runtime e Docker Desktop iniciado no modo **containe
 
 ## Instalar e utilizar
 
-1. Execute `RagVDesktop-Homologacao-0.1.2-hml-<SHA>-Setup.exe`. Pode escolher uma pasta com espaços. A instalação é por usuário, sem elevação de administrador.
+1. Execute `RagVDesktop-Homologacao-0.1.3-hml-<SHA>-Setup.exe`. Pode escolher uma pasta com espaços. A instalação é por usuário, sem elevação de administrador.
 2. O pacote completo fica na pasta escolhida: executável, scripts e subpasta `runtime`. A cópia é verificada pelo instalador antes de oferecer a abertura. Não selecione um checkout Git nem a pasta da instalação habitual.
 3. Inicie Docker Desktop e abra o atalho **RagV Homologação**. Uma janela de progresso acompanha o preparo inicial; pode demorar no primeiro build. Nas próximas aberturas, a imagem desta revisão é reutilizada.
-4. Use o atalho **Copiar token - RagV Homologação**. Na janela RagV, abra **Configurar acesso**, cole o Bearer e clique em **Verificar**. Não compartilhe esse token nem deixe a área de transferência exposta.
+4. Na primeira abertura, crie uma senha local com pelo menos 8 caracteres. Nas próximas aberturas, informe essa senha; o desktop injeta internamente o Bearer sintético desta instalação e autentica a API sem mostrar ou solicitar token.
 5. O Histórico começa vazio e persiste no banco próprio. Fechar a janela não remove banco, dados ou serviços. Reabrir usa o mesmo tenant.
 
-O perfil `%LOCALAPPDATA%\RagV-Homologacao` guarda `.env`, token e diagnósticos com permissões limitadas ao usuário e SYSTEM. O instalador **nunca** inclui credenciais reais. Um perfil de homologação anterior válido é preservado; nunca se importa configuração do projeto habitual. O nome Compose é `ragv-hml-<identificador aleatório>`, com volume PostgreSQL exclusivo. PostgreSQL não publica porta; a API usa somente loopback, escolhendo porta livre na primeira abertura. Se uma porta anteriormente escolhida passar a ser ocupada, não remova volumes: feche o serviço conflitante e reabra a homologação.
+O perfil `%LOCALAPPDATA%\RagV-Homologacao` guarda `.env`, token interno, hash/salt da senha e diagnósticos com permissões limitadas ao usuário e SYSTEM. O instalador **nunca** inclui credenciais reais. Um perfil de homologação anterior válido é preservado; nunca se importa configuração do projeto habitual. O nome Compose é `ragv-hml-<identificador aleatório>`, com volume PostgreSQL exclusivo. PostgreSQL não publica porta; a API usa somente loopback, escolhendo porta livre na primeira abertura. Se uma porta anteriormente escolhida passar a ser ocupada, não remova volumes: feche o serviço conflitante e reabra a homologação.
 
 ## Configurar DataJud sem terminal
 
@@ -24,6 +24,8 @@ O perfil `%LOCALAPPDATA%\RagV-Homologacao` guarda `.env`, token e diagnósticos 
 4. Na janela RagV, selecione DataJud em **Configurar acesso** e consulte somente CNJ autorizado. Nenhuma consulta paga ou processual é feita pelo configurador.
 
 ## Diagnóstico e recuperação
+
+Use o atalho **Redefinir senha local - RagV Homologação** para confirmar a recuperação e cadastrar uma nova senha. O Docker, tenant e Histórico são preservados; nenhum volume é removido.
 
 - `runtime/HOMOLOGACAO.txt`, na pasta instalada: versão, SHA base e SHA do pacote.
 - `%LOCALAPPDATA%\RagV-Homologacao\diagnostics.txt`: revisão, projeto, porta e runtime efetivos.
