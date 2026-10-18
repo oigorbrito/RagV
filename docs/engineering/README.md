@@ -9,6 +9,9 @@ This directory records engineering policy that spans individual migrations and d
 - `../deployment/backup-restore.md` — backup/restore procedure and recovery caveats.
 - `../migrations/` — change-specific migration notes and durable decisions.
 - `../../AGENTS.md` — executable operating contract for coding agents.
+- `feature-registry.md` — registro de contratos protegidos, estado e evidências.
+- `validation-matrix.md` — ligação entre contratos e validações executáveis.
+- `regression-policy.md` — política de impacto, persistência, evidência e lacunas.
 
 ## Documentation rule
 
