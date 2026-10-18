@@ -21,6 +21,7 @@ class HomologationPackageTests(unittest.TestCase):
         self.assertIn("PrivilegesRequired=lowest", text)
         self.assertNotIn("redefinir-senha.ps1", text)
         self.assertNotIn("Redefinir senha local", text)
+        self.assertIn("configurar-datajud.ps1", text)
 
     def test_windows_scripts_are_utf8_bom(self):
         for path in (ROOT / "packaging/windows").glob("*.ps1"):
@@ -61,6 +62,13 @@ class HomologationPackageTests(unittest.TestCase):
         self.assertIn("RPY_HOMOLOGATION_MODE", text)
         self.assertIn("RPY_HOMOLOGATION_BIND_ADDRESS", text)
         self.assertNotIn("ragv_rpy_pgdata", text)
+
+    def test_datajud_configurator_uses_cnj_and_recreates_only_homologation_services(self):
+        text = (ROOT / "packaging/windows/configurar-datajud.ps1").read_text(encoding="utf-8-sig")
+        self.assertIn("https://www.cnj.jus.br/sistemas/datajud/api-publica/", text)
+        self.assertIn("DATAJUD_AUTHORIZED_USE=true", text)
+        self.assertIn("worker-1','worker-2','scheduler", text)
+        self.assertNotIn("postgres", text.split("Invoke-HmlDocker", 1)[-1])
 
     def test_package_has_allowlisted_sources_and_explicit_sha(self):
         text = (ROOT / "scripts/package_windows_homologation.ps1").read_text(encoding="utf-8-sig")
