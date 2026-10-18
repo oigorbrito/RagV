@@ -80,6 +80,16 @@ class DesktopLauncherTests(unittest.TestCase):
             self.assertEqual(desktop.main(), 0)
         fake_webview.start.assert_called_once()
 
+    @patch("subprocess.Popen")
+    def test_datajud_configurator_uses_packaged_script(self, popen):
+        with patch.dict(
+            "os.environ",
+            {"RPY_DESKTOP_CONFIGURATOR": "C:\\RagV\\configurar-datajud.ps1"},
+        ), patch.object(desktop.os.path, "isfile", return_value=True):
+            result = desktop.DesktopApi().open_datajud_configurator()
+        self.assertEqual(result, {"ok": True})
+        popen.assert_called_once()
+
     def test_managed_token_script_does_not_expose_token_in_url(self):
         with patch.dict("os.environ", {"RPY_DESKTOP_TOKEN": "managed-token"}):
             window = MagicMock()

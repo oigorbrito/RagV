@@ -90,6 +90,8 @@ try {
     Remove-Item -LiteralPath (Join-Path $script:HmlRoot 'last-error.txt') -ErrorAction SilentlyContinue
     $script:HmlStage = 'Abrindo RagV / Grupo Villela'
     $env:RPY_DESKTOP_URL = $url
+    $env:RPY_DESKTOP_CONFIGURATOR = Join-Path $PSScriptRoot 'configurar-datajud.ps1'
+    $env:RPY_POWERSHELL = (Get-Command powershell.exe).Source
     $progress.Close()
     $progress = $null
     $script:HmlStatusLabel = $null

@@ -2,6 +2,7 @@
 
 import json
 import os
+import subprocess
 import sys
 import urllib.error
 import urllib.request
@@ -34,6 +35,24 @@ def show_error(message):
         )
     except (AttributeError, OSError):
         print(message, file=sys.stderr)
+
+
+class DesktopApi:
+    def open_datajud_configurator(self):
+        script = os.environ.get("RPY_DESKTOP_CONFIGURATOR", "").strip()
+        if not script or not os.path.isfile(script):
+            return {"ok": False, "message": "Configurador DataJud não encontrado."}
+        powershell = os.environ.get(
+            "RPY_POWERSHELL", r"C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe"
+        )
+        try:
+            subprocess.Popen(
+                [powershell, "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", script],
+                creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+            )
+        except (OSError, ValueError):
+            return {"ok": False, "message": "Não foi possível abrir o configurador DataJud."}
+        return {"ok": True}
 
 
 def _inject_managed_token(window):
@@ -69,6 +88,7 @@ def main():
         "RagV",
         get_url(),
         width=1200,
+        js_api=DesktopApi(),
         height=800,
         min_size=(800, 600),
     )
