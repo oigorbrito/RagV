@@ -136,19 +136,28 @@ def test_csp_matches_self_hosted_frontend_without_inline_exceptions()->None:
  assert "object-src 'none'" in csp
 
 
-def test_desktop_launcher_rebuilds_api_without_discarding_compose_state()->None:
- script=(Path(__file__).parents[1]/"scripts"/"start-ragv-desktop.ps1").read_text(encoding="utf-8-sig")
- build=script.index("docker compose build api")
- build_error=script.index("Falha ao reconstruir a API RagV", build)
- start=script.index("docker compose up -d --no-build", build_error)
- start_error=script.index("Falha ao iniciar os serviços RagV", start)
+def test_desktop_daily_launcher_does_not_rebuild_or_migrate()->None:
+ root=Path(__file__).parents[1]
+ script=(root/"scripts"/"start-ragv-desktop.ps1").read_text(encoding="utf-8-sig")
  checks=unittest.TestCase()
- checks.assertLess(build,build_error)
- checks.assertLess(build_error,start)
- checks.assertLess(start,start_error)
+ checks.assertIn("docker compose up -d --no-build",script)
+ checks.assertNotIn("docker compose build",script)
+ checks.assertIn("update-ragv-desktop.ps1",script)
  checks.assertNotIn("docker compose down",script)
  checks.assertNotIn("volume rm",script)
  checks.assertNotIn("docker volume",script)
+
+
+def test_explicit_desktop_update_builds_coordinated_services_after_backup()->None:
+ root=Path(__file__).parents[1]
+ script=(root/"scripts"/"update-ragv-desktop.ps1").read_text(encoding="utf-8-sig")
+ backup=script.index("scripts/backup_database.sh")
+ build=script.index("docker compose build migrate api worker-1 worker-2 scheduler")
+ up=script.index("docker compose up -d --no-build migrate api worker-1 worker-2 scheduler")
+ checks=unittest.TestCase()
+ checks.assertLess(backup,build)
+ checks.assertLess(build,up)
+ checks.assertIn("backupFullPath",script)
 
 
 def test_frontend_supports_project_pages_and_configurable_api_origin()->None:
