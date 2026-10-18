@@ -37,3 +37,11 @@ O instalador atual foi comprovado como `NotSigned`; portanto, rejeitar sua aplic
 ## Consequência
 
 Este bloco entrega o contrato e o gate verificável, não uma atualização automática declarada como funcional. O bloqueio é de cadeia de confiança/artefato e rollback, não de PyWebView ou do cliente DataJud. O futuro botão deverá chamar um processo externo e permanecer desabilitado quando não houver manifesto e instalador válidos.
+
+## Verificação do Bloco 206
+
+A máquina possui `New-SelfSignedCertificate`, `Set-AuthenticodeSignature` e `Get-AuthenticodeSignature`, mas não possui `signtool.exe`, `osslsigncode` ou uma identidade de assinatura confiável do projeto. A possibilidade de criar um certificado autoassinado não satisfaz a cadeia de confiança de produção; por isso não foi usada para declarar atualização segura.
+
+O verificador foi exercitado contra uma cópia do instalador atual e rejeitou o pacote com `NotSigned`. Também foram cobertos por testes/checagens os gates de manifesto ausente, versão inferior, hash divergente e assinatura inválida. Não houve aplicação A→B, pois o pré-requisito de assinatura e rollback não está satisfeito.
+
+O resultado deste bloco é `UPDATE_BLOCKED_BY_TRUST_CHAIN`, não `UPDATE_PASS`. Nenhum botão operacional foi adicionado ao PyWebView e nenhuma instalação foi alterada.
