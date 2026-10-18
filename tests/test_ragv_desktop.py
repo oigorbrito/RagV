@@ -71,6 +71,34 @@ class DesktopLauncherTests(unittest.TestCase):
         self.assertEqual(args[0], "RagV")
         self.assertEqual(args[1], desktop.URL)
 
+    @patch.dict("os.environ", {"RPY_DESKTOP_TOKEN": "managed-token"})
+    @patch.object(desktop, "api_ready", return_value=True)
+    def test_main_injects_managed_token_without_manual_bearer(self, _ready):
+        fake_webview = MagicMock()
+        window = fake_webview.create_window.return_value
+        with patch.dict(sys.modules, {"webview": fake_webview}):
+            self.assertEqual(desktop.main(), 0)
+        fake_webview.start.assert_called_once()
+
+    @patch("subprocess.Popen")
+    def test_datajud_configurator_uses_packaged_script(self, popen):
+        with patch.dict(
+            "os.environ",
+            {"RPY_DESKTOP_CONFIGURATOR": "C:\\RagV\\configurar-datajud.ps1"},
+        ), patch.object(desktop.os.path, "isfile", return_value=True):
+            result = desktop.DesktopApi().open_datajud_configurator()
+        self.assertEqual(result, {"ok": True})
+        popen.assert_called_once()
+
+    def test_managed_token_script_does_not_expose_token_in_url(self):
+        with patch.dict("os.environ", {"RPY_DESKTOP_TOKEN": "managed-token"}):
+            window = MagicMock()
+            desktop._inject_managed_token(window)
+        script = window.evaluate_js.call_args.args[0]
+        self.assertIn("bearer-token", script)
+        self.assertIn("managed-token", script)
+        self.assertNotIn("http", script.split("input.value", 1)[0])
+
     @patch.object(desktop, "api_ready", return_value=True)
     def test_main_custom_url_from_env(self, _ready):
         fake_webview = MagicMock()

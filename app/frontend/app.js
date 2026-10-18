@@ -59,6 +59,7 @@ const form = document.querySelector('#search-form'),
   datajudInfoWrap = document.querySelector('#datajud-info-wrap'),
   datajudTooltip = document.querySelector('#datajud-tooltip'),
   datajudStatusHint = document.querySelector('#datajud-status-hint'),
+  datajudConfigureButton = document.querySelector('#datajud-configure'),
   apiConnectivity = document.querySelector('#api-connectivity'),
   apiConnectivityLabel = document.querySelector('#api-connectivity-label');
 
@@ -194,6 +195,20 @@ async function verifyAuthentication(token) {
   }
 }
 
+async function openDataJudConfigurator() {
+  if (!window.pywebview || !window.pywebview.api || !window.pywebview.api.open_datajud_configurator) {
+    if (datajudStatusHint) datajudStatusHint.textContent = 'Abra o configurador DataJud pelo atalho da homologação.';
+    return;
+  }
+  const result = await window.pywebview.api.open_datajud_configurator();
+  if (!result || !result.ok) {
+    if (datajudStatusHint) datajudStatusHint.textContent = result?.message || 'Não foi possível abrir o configurador DataJud.';
+    return;
+  }
+  if (datajudStatusHint) datajudStatusHint.textContent = 'Conclua a autorização no configurador; depois atualizaremos o estado.';
+  window.setTimeout(fetchCapabilities, 3000);
+}
+
 async function fetchCapabilities() {
   try {
     const response = await fetch(apiUrl('/capabilities'));
@@ -210,14 +225,16 @@ async function fetchCapabilities() {
     if (datajud && sourceDataJudRadio) {
       if (datajud.enabled) {
         sourceDataJudRadio.disabled = false;
+        if (datajudConfigureButton) datajudConfigureButton.hidden = true;
         if (datajudStatusHint) {
           datajudStatusHint.textContent = '';
           datajudStatusHint.className = 'source-hint';
         }
       } else {
         sourceDataJudRadio.disabled = true;
+        if (datajudConfigureButton) datajudConfigureButton.hidden = false;
         if (datajudStatusHint) {
-          datajudStatusHint.textContent = 'DataJud indisponível';
+          datajudStatusHint.textContent = datajud.reason_unavailable || 'DataJud indisponível no servidor.';
           datajudStatusHint.className = 'source-warning';
         }
       }
@@ -1351,6 +1368,8 @@ if (sourceJuditRadio) {
     if (sourceJuditRadio.checked) currentSource = 'judit';
   });
 }
+
+if (datajudConfigureButton) datajudConfigureButton.addEventListener('click', openDataJudConfigurator);
 
 if (sourceDataJudRadio) {
   sourceDataJudRadio.addEventListener('change', () => {

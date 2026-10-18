@@ -30,6 +30,30 @@ def test_configured_tokens_parse_to_uuid_values(monkeypatch) -> None:
     assert isinstance(configured["token-a"], UUID)
 
 
+def test_homologation_token_requires_loopback_test_markers(monkeypatch) -> None:
+    monkeypatch.setenv(
+        "RPY_BEARER_TOKENS",
+        json.dumps({"ragv-hml-local-test-2026": str(uuid4())}),
+    )
+    monkeypatch.delenv("RPY_HOMOLOGATION_MODE", raising=False)
+    monkeypatch.delenv("RPY_HOMOLOGATION_BIND_ADDRESS", raising=False)
+
+    with pytest.raises(RuntimeError, match="token padrão de homologação"):
+        configured_bearer_tokens()
+
+
+def test_homologation_token_is_accepted_only_with_loopback_test_markers(monkeypatch) -> None:
+    tenant_id = uuid4()
+    monkeypatch.setenv(
+        "RPY_BEARER_TOKENS",
+        json.dumps({"ragv-hml-local-test-2026": str(tenant_id)}),
+    )
+    monkeypatch.setenv("RPY_HOMOLOGATION_MODE", "true")
+    monkeypatch.setenv("RPY_HOMOLOGATION_BIND_ADDRESS", "127.0.0.1")
+
+    assert configured_bearer_tokens() == {"ragv-hml-local-test-2026": tenant_id}
+
+
 def test_invalid_json_fails_configuration(monkeypatch) -> None:
     monkeypatch.setenv("RPY_BEARER_TOKENS", "{not-json")
 

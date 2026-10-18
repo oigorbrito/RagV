@@ -197,6 +197,14 @@ A change is complete only when:
 - the actual CI head is green;
 - the code fits Rpy's current module boundaries rather than preserving donor folder structure for convenience.
 
+## Preservação de contratos comprovados
+
+Antes de editar, identifique os contratos afetados no [registro de funcionalidades](docs/engineering/feature-registry.md) e execute a validação correspondente na [matriz](docs/engineering/validation-matrix.md). Mudanças em contratos protegidos exigem uma justificativa técnica, evidência comparativa quando substituírem um mecanismo funcional e um diff restrito ao escopo; não descarte mudanças não commitadas.
+
+Não sobrescreva configuração persistente com defaults durante bootstrap, reinstalação ou atualização. Não reintroduza autenticação removida por decisão explícita. Diferencie bloqueio de autorização de falha técnica e não declare PASS apenas por testes unitários quando o contrato atravessar processos, Docker, PostgreSQL ou um provedor externo.
+
+A homologação não pode modificar bancos, tenants, volumes ou configuração da instalação habitual. Não execute consultas Judit pagas nem consultas DataJud sem autorização específica. Não faça merge, release ou publicação automática. Atualizadores Windows devem rejeitar artefatos sem assinatura Authenticode válida, manifesto confiável, hash compatível e plano de rollback; SHA-256 isolado não prova autenticidade. As regras detalhadas de impacto, evidência e lacunas estão em [regression-policy.md](docs/engineering/regression-policy.md).
+
 ## Working style for coding agents
 
 Prefer working behavior over speculative architecture. Make small vertical slices executable early. When an external implementation is already correct and generic, adapt it rather than rewriting it for stylistic reasons. When donor abstractions exceed Rpy's needs, delete them aggressively.

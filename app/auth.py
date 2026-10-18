@@ -7,6 +7,8 @@ from uuid import UUID
 
 from fastapi import HTTPException, Request
 
+HOMOLOGATION_TEST_TOKEN = "ragv-hml-local-test-2026"
+
 from app.api_key_auth import (
     RequestPrincipal,
     api_key_environment,
@@ -40,6 +42,14 @@ def configured_bearer_tokens() -> dict[str, UUID]:
 
     configured: dict[str, UUID] = {}
     for token, tenant_id in parsed.items():
+        if token == HOMOLOGATION_TEST_TOKEN and (
+            os.environ.get("RPY_HOMOLOGATION_MODE", "").lower() != "true"
+            or os.environ.get("RPY_HOMOLOGATION_BIND_ADDRESS", "") != "127.0.0.1"
+        ):
+            raise RuntimeError(
+                "o token padrão de homologação exige RPY_HOMOLOGATION_MODE=true "
+                "e RPY_HOMOLOGATION_BIND_ADDRESS=127.0.0.1"
+            )
         if not isinstance(token, str) or not token:
             raise RuntimeError("RPY_BEARER_TOKENS contains an empty bearer token")
         if token != token.strip() or any(char.isspace() for char in token):
