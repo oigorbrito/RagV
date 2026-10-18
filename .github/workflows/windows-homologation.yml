@@ -46,7 +46,7 @@ jobs:
           $installer = Get-ChildItem dist-installer/*-Setup.exe | Select-Object -First 1
           if (-not $installer) { throw 'Installer missing.' }
           $target = Join-Path $env:RUNNER_TEMP 'RagV-Homologacao-Smoke'
-          Start-Process -FilePath $installer.FullName -ArgumentList @('/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART',"/DIR=$target") -Wait -PassThru | ForEach-Object { if ($_.ExitCode -ne 0) { throw "Inno Setup exit code $($_.ExitCode)" } }
+          Start-Process -FilePath $installer.FullName -ArgumentList @('/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART',"/DIR=`"$target`"") -Wait -PassThru | ForEach-Object { if ($_.ExitCode -ne 0) { throw "Inno Setup exit code $($_.ExitCode)" } }
           foreach ($path in @('RagVDesktop.exe','start-homologacao.ps1','configurar-datajud.ps1')) { if (-not (Test-Path (Join-Path $target $path))) { throw "Missing installed file: $path" } }
           foreach ($path in @('compose.yaml','compose.homologacao.yaml','Dockerfile','app/api.py','sql/034_acquisition_authorizations.sql')) { if (-not (Test-Path (Join-Path $env:LOCALAPPDATA "RagV-Homologacao/project/$path"))) { throw "Missing isolated runtime file: $path" } }
           Write-Host 'Installed package file smoke passed. Docker/Linux runtime smoke is performed separately on Windows with Docker Desktop; this job does not qualify runtime behavior.'

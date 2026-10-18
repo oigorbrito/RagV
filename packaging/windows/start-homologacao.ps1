@@ -1,4 +1,6 @@
 $ErrorActionPreference = 'Stop'
+# Evita herdar a versão de módulo do PowerShell 7 quando o atalho chama Windows PowerShell.
+Import-Module (Join-Path $PSHOME 'Modules/Microsoft.PowerShell.Security/Microsoft.PowerShell.Security.psd1') -ErrorAction Stop
 $profileRoot = Join-Path $env:LOCALAPPDATA 'RagV-Homologacao'
 $project = Join-Path $profileRoot 'project'
 $envFile = Join-Path $project '.env'
@@ -44,16 +46,17 @@ try {
             'JUDIT_API_KEY='
             'ANTHROPIC_API_KEY='
             'OPENAI_API_KEY='
-        ) | Set-Content -LiteralPath $envFile -Encoding ascii
-        $acl = Get-Acl $envFile
+        ) | Set-Content -LiteralPath "$envFile.new" -Encoding ascii
+        $acl = Get-Acl "$envFile.new"
         $acl.SetAccessRuleProtection($true, $false)
         $identity = [System.Security.Principal.WindowsIdentity]::GetCurrent().Name
         $rule = New-Object System.Security.AccessControl.FileSystemAccessRule($identity,'FullControl','Allow')
         $acl.SetAccessRule($rule)
-        Set-Acl -LiteralPath $envFile -AclObject $acl
+        Set-Acl -LiteralPath "$envFile.new" -AclObject $acl
         $tokenFile = Join-Path $profileRoot 'access-token.txt'
         Set-Content -LiteralPath $tokenFile -Value $token -Encoding ascii
         Set-Acl -LiteralPath $tokenFile -AclObject $acl
+        Move-Item -LiteralPath "$envFile.new" -Destination $envFile
         Set-Content -LiteralPath (Join-Path $profileRoot 'diagnostics.txt') -Value "RagV Homologação`nVersão 0.1.1-hml`nSHA da aplicação $revision`nCompose $composeProject`nAPI http://127.0.0.1:$apiPort`nTenant sintético $tenant" -Encoding utf8
     }
     $envLines = Get-Content -LiteralPath $envFile
