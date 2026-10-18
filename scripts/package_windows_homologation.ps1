@@ -48,11 +48,15 @@ if (-not (Test-Path $exe)) { throw 'PyInstaller não produziu RagVDesktop.exe.' 
 $iscc = Join-Path ${env:ProgramFiles(x86)} 'Inno Setup 6\ISCC.exe'
 if (-not (Test-Path $iscc)) { $iscc = Join-Path $env:LOCALAPPDATA 'Programs\Inno Setup 6\ISCC.exe' }
 if (-not (Test-Path $iscc)) { throw 'Inno Setup 6 ISCC.exe não encontrado.' }
-$innoVersion = (Get-Item $iscc).VersionInfo.ProductVersion
-if ($innoVersion -notlike '6.7.3*') { throw "Inno Setup 6.7.3 necessário; encontrado $innoVersion" }
 $iss = Join-Path $root 'packaging/windows/RagVDesktop.iss'
-& $iscc "/DMyAppVersion=$Version" "/DSourceSha=$short" "/O$installerOut" "/FRagVDesktop-Homologacao-$Version-$short-Setup" $iss
-if ($LASTEXITCODE -ne 0) { throw 'Inno Setup falhou.' }
+$compilerOutput = & $iscc "/DMyAppVersion=$Version" "/DSourceSha=$short" "/O$installerOut" "/FRagVDesktop-Homologacao-$Version-$short-Setup" $iss
+if ($LASTEXITCODE -ne 0) { $compilerOutput | Write-Output; throw 'Inno Setup falhou.' }
+$compilerOutput | Write-Output
+# ISCC.exe tem ProductVersion=0.0.0.0; a versão real é a do engine no log.
+if (($compilerOutput -join "`n") -notmatch 'Compiler engine version: Inno Setup 6\.7\.3(?:\r?\n|$)') {
+    Remove-Item (Join-Path $installerOut '*-Setup.exe') -Force
+    throw 'Build rejeitado: engine Inno Setup diferente de 6.7.3.'
+}
 $outFile = Join-Path $installerOut "RagVDesktop-Homologacao-$Version-$short-Setup.exe"
 if (-not (Test-Path $outFile)) { throw 'Inno Setup não produziu o instalador esperado.' }
 $hash = (Get-FileHash $outFile -Algorithm SHA256).Hash.ToLowerInvariant()
