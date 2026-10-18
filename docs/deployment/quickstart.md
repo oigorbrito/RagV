@@ -12,6 +12,7 @@ Linux/macOS:
 git clone https://github.com/oigorbrito/rpy.git
 cd rpy
 cp .env.example .env
+printf 'POSTGRES_PASSWORD=%s\n' "$(openssl rand -hex 32)" >> .env
 ./scripts/smoke_offline.sh
 ```
 
@@ -21,12 +22,16 @@ Windows PowerShell:
 git clone https://github.com/oigorbrito/rpy.git
 cd rpy
 Copy-Item .env.example .env
+$pgPassword = [Convert]::ToHexString([Security.Cryptography.RandomNumberGenerator]::GetBytes(32))
+Add-Content .env "POSTGRES_PASSWORD=$pgPassword"
 .\scripts\smoke_offline.ps1
 ```
 
 O smoke offline reconstrói a imagem, aplica migrations e executa o pipeline com dados sintéticos e zero chamadas pagas. O resultado esperado termina com `RPY OFFLINE SMOKE: PASS`.
 
 ## 2. Subir a stack local
+
+Compose exige `POSTGRES_PASSWORD` e publica API/PostgreSQL apenas em `127.0.0.1`; o endereço `postgres:5432` entre containers não muda. Em instalação existente, mantenha em `.env` a senha que já autentica o volume: mudar a variável não troca a senha PostgreSQL do volume e não é feito automaticamente.
 
 ```bash
 docker compose up -d --build
