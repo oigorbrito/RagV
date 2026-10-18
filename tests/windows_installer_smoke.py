@@ -59,7 +59,7 @@ def wait_ready():
                 with urllib.request.urlopen(url + '/ready', timeout=2) as response:
                     if response.status == 200:
                         return settings, url
-            except (urllib.error.URLError, TimeoutError):
+            except (urllib.error.URLError, OSError, TimeoutError):
                 pass
         if (ROOT / 'last-error.txt').exists():
             raise RuntimeError('Falha registrada em last-error.txt; o smoke não aceita continuar')
