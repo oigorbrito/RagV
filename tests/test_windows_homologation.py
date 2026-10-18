@@ -23,6 +23,34 @@ class HomologationPackageTests(unittest.TestCase):
         self.assertNotIn("Redefinir senha local", text)
         self.assertIn("configurar-datajud.ps1", text)
 
+    def test_installer_identity_and_shortcut_contract(self):
+        text = (ROOT / "packaging/windows/RagVDesktop.iss").read_text(encoding="utf-8-sig")
+        self.assertIn("AppId={{B197A6D1-1E4C-4F8A-A9F8-2DF6B1B9E197}", text)
+        self.assertIn("DefaultDirName={localappdata}\\Programs\\RagV Homologacao", text)
+        self.assertIn("UsePreviousAppDir=yes", text)
+        self.assertIn('Name: "desktopicon"', text)
+        self.assertIn('Flags: unchecked', text)
+        self.assertIn('Name: "{autoprograms}\\RagV Homologação"', text)
+        self.assertIn('Name: "{userdesktop}\\RagV Homologação"', text)
+        self.assertIn('"{app}\\start-homologacao.ps1"', text)
+        self.assertIn('IconFilename: "{app}\\RagVDesktop.exe"', text)
+        self.assertNotIn('Name: "{autoprograms}\\RagV Homologação"; Filename: "{app}\\RagVDesktop.exe"', text)
+
+    def test_installer_preserves_profile_and_does_not_create_password_shortcuts(self):
+        text = (ROOT / "packaging/windows/RagVDesktop.iss").read_text(encoding="utf-8-sig")
+        self.assertIn('Source: "homologacao-common.ps1"; DestDir: "{app}"', text)
+        self.assertIn('Source: "start-homologacao.ps1"; DestDir: "{app}"', text)
+        self.assertIn('Source: "configurar-datajud.ps1"; DestDir: "{app}"', text)
+        self.assertNotIn('Name: "{autoprograms}\\Redefinir', text)
+        self.assertNotIn('Name: "{autoprograms}\\Copiar', text)
+
+    def test_launcher_resolves_url_and_configurator_from_installed_profile(self):
+        launcher = (ROOT / "packaging/windows/start-homologacao.ps1").read_text(encoding="utf-8-sig")
+        self.assertIn("$env:RPY_DESKTOP_URL = $url", launcher)
+        self.assertIn("$env:RPY_DESKTOP_CONFIGURATOR = Join-Path $PSScriptRoot", launcher)
+        self.assertIn("$script:HmlRuntime", launcher)
+        self.assertIn("$settings.RPY_API_PORT", launcher)
+
     def test_windows_scripts_are_utf8_bom(self):
         for path in (ROOT / "packaging/windows").glob("*.ps1"):
             self.assertTrue(path.read_bytes().startswith(b'\xef\xbb\xbf'), path.name)
