@@ -53,6 +53,9 @@ try {
         Move-Item -LiteralPath $newEnv -Destination $script:HmlEnv
     }
     $settings = Get-HmlSettings
+    Ensure-HmlPassword
+    $mapping = $settings.RPY_BEARER_TOKENS | ConvertFrom-Json
+    $env:RPY_DESKTOP_TOKEN = [string]$mapping.PSObject.Properties[0].Name
     $compose = Get-HmlComposeArgs $settings
     $metadata = Get-Content (Join-Path $script:HmlRuntime 'HOMOLOGACAO.txt') -Encoding UTF8
     $packageSha = (($metadata | Where-Object { $_ -like 'Package SHA: *' }) -replace '^Package SHA: ', '')
