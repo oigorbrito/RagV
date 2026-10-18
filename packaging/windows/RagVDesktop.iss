@@ -10,7 +10,7 @@
 #define PowerShellExe "{sys}\WindowsPowerShell\v1.0\powershell.exe"
 
 [Setup]
-AppId={{F65B9E80-196B-4D04-A71E-962B3E891E45}
+AppId={{B197A6D1-1E4C-4F8A-A9F8-2DF6B1B9E197}
 AppName={#MyAppName}
 AppVersion={#MyAppVersion}
 AppPublisher={#MyAppPublisher}
