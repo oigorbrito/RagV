@@ -70,6 +70,25 @@ class HomologationPackageTests(unittest.TestCase):
         self.assertIn("requirements/windows-build.txt", text)
         self.assertNotIn("Copy-Item (Join-Path $root '.env')", text)
 
+    def test_standard_homologation_token_requires_explicit_loopback_markers(self):
+        with patch.dict(
+            "os.environ",
+            {"RPY_BEARER_TOKENS": json.dumps({"ragv-hml-local-test-2026": "00000000-0000-0000-0000-000000000001"})},
+            clear=True,
+        ):
+            with self.assertRaises(ValueError):
+                tenant_from_environment()
+        with patch.dict(
+            "os.environ",
+            {
+                "RPY_BEARER_TOKENS": json.dumps({"ragv-hml-local-test-2026": "00000000-0000-0000-0000-000000000001"}),
+                "RPY_HOMOLOGATION_MODE": "true",
+                "RPY_HOMOLOGATION_BIND_ADDRESS": "127.0.0.1",
+            },
+            clear=True,
+        ):
+            self.assertEqual(str(tenant_from_environment()), "00000000-0000-0000-0000-000000000001")
+
     def test_tenant_validation_rejects_missing_environment_and_bad_uuid(self):
         with patch.dict("os.environ", {}, clear=True):
             with self.assertRaises(KeyError):
