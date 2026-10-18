@@ -203,7 +203,7 @@ Antes de editar, identifique os contratos afetados no [registro de funcionalidad
 
 Não sobrescreva configuração persistente com defaults durante bootstrap, reinstalação ou atualização. Não reintroduza autenticação removida por decisão explícita. Diferencie bloqueio de autorização de falha técnica e não declare PASS apenas por testes unitários quando o contrato atravessar processos, Docker, PostgreSQL ou um provedor externo.
 
-A homologação não pode modificar bancos, tenants, volumes ou configuração da instalação habitual. Não execute consultas Judit pagas nem consultas DataJud sem autorização específica. Não faça merge, release ou publicação automática. As regras detalhadas de impacto, evidência e lacunas estão em [regression-policy.md](docs/engineering/regression-policy.md).
+A homologação não pode modificar bancos, tenants, volumes ou configuração da instalação habitual. Não execute consultas Judit pagas nem consultas DataJud sem autorização específica. Não faça merge, release ou publicação automática. Atualizadores Windows devem rejeitar artefatos sem assinatura Authenticode válida, manifesto confiável, hash compatível e plano de rollback; SHA-256 isolado não prova autenticidade. As regras detalhadas de impacto, evidência e lacunas estão em [regression-policy.md](docs/engineering/regression-policy.md).
 
 ## Working style for coding agents
 
