@@ -51,6 +51,12 @@ function Set-HmlPassword {
     $path=Join-Path $script:HmlRoot 'local-password.json'; $record | Set-Content -LiteralPath $path -Encoding UTF8; Set-HmlPrivatePath $path
     $password=$null
 }
+function Test-HmlHash([string]$Left, [string]$Right) {
+    try { $a=New-Object byte[] ($Left.Length/2);$b=New-Object byte[] ($Right.Length/2);for($j=0;$j-lt$a.Length;$j++){$a[$j]=[Convert]::ToByte($Left.Substring($j*2,2),16)};for($j=0;$j-lt$b.Length;$j++){$b[$j]=[Convert]::ToByte($Right.Substring($j*2,2),16)} } catch { return $false }
+    $different=$a.Length -bxor $b.Length; $limit=[Math]::Max($a.Length,$b.Length)
+    for($i=0;$i-lt$limit;$i++){ $x=if($i-lt$a.Length){$a[$i]}else{0};$y=if($i-lt$b.Length){$b[$i]}else{0};$different = $different -bor ($x -bxor $y) }
+    return $different -eq 0
+}
 function Ensure-HmlPassword {
     $path=Join-Path $script:HmlRoot 'local-password.json'
     if (-not (Test-Path $path)) { Set-HmlPassword; return }
@@ -60,7 +66,7 @@ function Ensure-HmlPassword {
         $password=Show-HmlPasswordDialog 'RagV Homologação — desbloquear' "Informe a senha local (tentativa $attempt de 3):"
         if ($null -eq $password) { throw 'Abertura cancelada.' }
         $hash=Get-HmlHash $password ([string]$record.salt); $password=$null
-        if ([Security.Cryptography.CryptographicOperations]::FixedTimeEquals([Convert]::FromHexString($hash),[Convert]::FromHexString([string]$record.hash))) { return }
+        if (Test-HmlHash $hash ([string]$record.hash)) { return }
         if ($attempt -lt 3) {[Windows.Forms.MessageBox]::Show('Senha incorreta.','RagV Homologação','OK','Warning') | Out-Null}
     }
     throw 'Acesso bloqueado após três tentativas. Use Redefinir senha local.'
