@@ -108,7 +108,7 @@ async def inspect_native(link, install, url, token, evidence, label, expected_hi
         await page.locator('#history-panel').wait_for(state='visible')
         if expected_history:
             await page.get_by_text(expected_history, exact=False).first.wait_for()
-        await page.screenshot(path=str(evidence / f'{label}-historico.png'))
+        await page.locator('#history-panel').screenshot(path=str(evidence / f'{label}-historico.png'))
         close_window(install)
 
 
