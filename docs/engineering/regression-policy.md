@@ -48,6 +48,8 @@ Para qualquer configuração durável, o teste deve demonstrar:
 
 DataJud tem uma proteção adicional: flags `DATAJUD_ENABLED` e `DATAJUD_AUTHORIZED_USE` devem permanecer coerentes entre API e workers; a chave deve permanecer fora da API; `/capabilities` é a confirmação do estado do backend. A ausência de autorização deve produzir `ATIVACAO_PENDENTE_DE_AUTORIZACAO`, não ativação artificial.
 
+A baseline funcional aceita em 2026-10-18 é a instalação `RagV Homologacao 198`, no commit de código `f3869ba38959da72b679bf8e56cb30fcb1fda4ee`, com evidência em `docs/engineering/evidence/datajud-functional-baseline-216.md`. Alterações em `app/datajud*`, `app/frontend/*`, `scripts/ragv_desktop.py`, launcher/Compose ou injeção de autenticação devem executar os contratos `DATAJUD-STATE-001`, `DATAJUD-RESTART-001`, `DESKTOP-BACKEND-001`, `DESKTOP-AUTH-001` e `DATAJUD-SELECTOR-001`. `DATAJUD-E2E-001` só pode ser aceito com consulta externa expressamente autorizada; a baseline não o aprova. A captura visual deve ser sanitizada e tokens/chaves nunca podem entrar em logs, Git ou artefatos.
+
 ## Controle leve de impacto
 
 Mudanças em `app/auth.py`, `app/api.py`, `app/datajud*`, `app/frontend/*`, `scripts/ragv_desktop.py`, `scripts/bootstrap_homologation.py`, Compose, SQL, launcher/installer Windows ou workers devem apontar os IDs afetados e executar a seleção correspondente da matriz. O controle pode ser um teste/checagem estática simples; não introduzir sistema paralelo de governança.

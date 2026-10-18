@@ -55,3 +55,31 @@ def test_homologation_launcher_has_no_habitual_project_reference() -> None:
     assert "D:\\projetos" not in launcher
     assert "ragv_rpy_pgdata" not in launcher
     assert "ragv_rpy_pgdata" not in common
+
+
+def test_desktop_backend_and_auth_contracts_remain_explicit() -> None:
+    desktop = _text("scripts/ragv_desktop.py")
+    launcher = _text("packaging/windows/start-homologacao.ps1")
+    assert "RPY_DESKTOP_URL" in launcher
+    assert "RPY_DESKTOP_TOKEN" in launcher
+    assert "RPY_DESKTOP_TOKEN" in desktop
+    assert "evaluate_js" in desktop
+    assert "bearer-token" in desktop
+    assert "http" not in desktop.split("evaluate_js", 1)[-1].split("bearer-token", 1)[0]
+
+
+def test_datajud_selector_follows_capabilities_without_secret_exposure() -> None:
+    frontend = _text("app/frontend/app.js")
+    html = _text("app/frontend/index.html")
+    assert "data.sources && data.sources.datajud" in frontend
+    assert "sourceDataJudRadio.disabled = false" in frontend
+    assert "sourceDataJudRadio.disabled = true" in frontend
+    assert "DATAJUD_API_KEY" not in html
+    assert "DATAJUD_API_KEY" not in frontend
+
+
+def test_datajud_e2e_contract_is_explicitly_external_and_not_automatic() -> None:
+    frontend = _text("app/frontend/app.js")
+    assert "metadata_lookup" not in frontend or "DataJud" in frontend
+    assert "source-datajud" in frontend
+    assert "Judit" in frontend
