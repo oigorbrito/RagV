@@ -69,6 +69,20 @@ function Get-HmlSettings {
     if ($settings.COMPOSE_PROJECT_NAME -notmatch '^ragv-hml-[a-f0-9]{12}$') { throw 'Identificador de homologação inválido.' }
     $port = 0
     if (-not [int]::TryParse($settings.RPY_API_PORT, [ref]$port) -or $port -lt 1024 -or $port -gt 65535) { throw 'Porta local da homologação inválida.' }
+    try {
+        $mapping = $settings.RPY_BEARER_TOKENS | ConvertFrom-Json
+        $entries = @($mapping.PSObject.Properties)
+        $tenantGuid = [guid]::Empty
+        if ($entries.Count -ne 1 -or $entries[0].Name.Length -lt 32 -or -not [guid]::TryParse([string]$entries[0].Value, [ref]$tenantGuid)) { throw 'invalid' }
+    } catch { throw 'O perfil não contém um Bearer e UUID de tenant válidos. Nenhuma credencial foi regenerada.' }
+    # Recupera o arquivo de acesso se uma inicialização antiga parou antes de gravá-lo.
+    # Reutiliza a configuração durável; nunca troca senha/tenant de um volume existente.
+    $tokenFile = Join-Path $script:HmlRoot 'access-token.txt'
+    $savedToken = if (Test-Path $tokenFile) { (Get-Content -LiteralPath $tokenFile -Raw -Encoding UTF8).Trim() } else { '' }
+    if ($savedToken -cne $entries[0].Name) {
+        Set-Content -LiteralPath $tokenFile -Value $entries[0].Name -Encoding ASCII
+        Set-HmlPrivatePath $tokenFile
+    }
     return $settings
 }
 

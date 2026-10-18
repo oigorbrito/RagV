@@ -103,7 +103,7 @@ async def inspect_native(link, install, url, token, evidence, label, expected_hi
         await page.locator('#access-trigger').click()
         await page.locator('#bearer-token').fill(token)
         await page.locator('#verify-token').click()
-        await page.wait_for_function("document.querySelector('#access-trigger').classList.contains('authenticated')")
+        await page.locator('#access-trigger.authenticated').wait_for(timeout=20000)
         await page.locator('#history-trigger').click()
         await page.locator('#history-panel').wait_for(state='visible')
         if expected_history:
@@ -204,6 +204,9 @@ def main():
     assert json.loads(run(['docker','exec',postgres,'psql','-U','rpy','-d','rpy','-Atc',sql])) == tenant_before
     rows = json.loads(run(['docker','inspect',*[f'{name}-{s}-1' for s in ('api','worker-1','worker-2','scheduler','postgres')]]))
     assert all(row['State']['Running'] for row in rows)
+    assert rows[-1]['State']['Health']['Status'] == 'healthy'
+    migration = run(['docker','exec',postgres,'psql','-U','rpy','-d','rpy','-Atc','SELECT filename FROM schema_migrations ORDER BY filename DESC LIMIT 1']).strip()
+    assert migration == '034_acquisition_authorizations.sql'
     assert len({row['Image'] for row in rows[:-1]}) == 1
     assert not rows[-1]['NetworkSettings']['Ports'].get('5432/tcp')
     assert all(mount.get('Name') != 'ragv_rpy_pgdata' for mount in rows[-1]['Mounts'])
@@ -213,7 +216,9 @@ def main():
     dialog = configuration_dialog(args.evidence_dir)
     assert snapshot() == before
     elevated = powershell("$p=[Security.Principal.WindowsPrincipal]::new([Security.Principal.WindowsIdentity]::GetCurrent()); $p.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)").strip()
-    report = {'installer': args.installer.name,'sha256':hashlib.sha256(args.installer.read_bytes()).hexdigest(),'bytes':args.installer.stat().st_size,'install_exit':installed.returncode,'windows_install':'PASS','shortcut_native_window':'PASS','reopening':'PASS','build_count':first_builds,'tenant_persisted':'PASS','synthetic_history_persisted':'PASS','fixture_scope':'Persistência somente; nenhuma consulta processual enviada','bootstrap_missing_mapping_exit':negative.returncode,'same_image_api_workers_scheduler':'PASS','habitual_isolation':'PASS','habitual_before':before,'habitual_after':snapshot(),'elevated':elevated,'install_directory':str(args.install_dir),'api_port':settings['RPY_API_PORT'],'compose_project':name,'provider_queries':0,'dialogo_codificacao':dialog}
+    (args.evidence_dir/'startup.jsonl').write_bytes((ROOT/'startup.jsonl').read_bytes())
+    (args.evidence_dir/'installed-revision.txt').write_bytes((args.install_dir/'runtime/HOMOLOGACAO.txt').read_bytes())
+    report = {'migration':migration,'postgres_health':'healthy','installer': args.installer.name,'sha256':hashlib.sha256(args.installer.read_bytes()).hexdigest(),'bytes':args.installer.stat().st_size,'install_exit':installed.returncode,'windows_install':'PASS','shortcut_native_window':'PASS','reopening':'PASS','build_count':first_builds,'tenant_persisted':'PASS','synthetic_history_persisted':'PASS','fixture_scope':'Persistência somente; nenhuma consulta processual enviada','bootstrap_missing_mapping_exit':negative.returncode,'same_image_api_workers_scheduler':'PASS','habitual_isolation':'PASS','habitual_before':before,'habitual_after':snapshot(),'elevated':elevated,'install_directory':str(args.install_dir),'api_port':settings['RPY_API_PORT'],'compose_project':name,'provider_queries':0,'dialogo_codificacao':dialog}
     (args.evidence_dir/'result.json').write_text(json.dumps(report,ensure_ascii=False,indent=2),encoding='utf-8')
     print(json.dumps(report,ensure_ascii=True,indent=2))
 
