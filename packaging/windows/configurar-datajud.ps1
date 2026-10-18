@@ -1,32 +1,69 @@
-$ErrorActionPreference = 'Stop'
-$project = Join-Path $env:LOCALAPPDATA 'RagV-Homologacao\project'
-$envFile = Join-Path $project '.env'
-$revision = 'a414b2a1d478ccfbf33611a7c40437dd3f90f3b7'
-$composeProject = $null
-if (-not (Test-Path $envFile)) { throw 'Abra o RagV Homologação ao menos uma vez antes de configurar o DataJud.' }
-$composeProject = ((Get-Content -LiteralPath $envFile | Where-Object { $_ -like 'COMPOSE_PROJECT_NAME=*' } | Select-Object -First 1) -replace '^COMPOSE_PROJECT_NAME=','')
-if ($composeProject -notmatch '^ragv-hml-[a-f0-9]{12}$') { throw 'Perfil de homologação inválido.' }
-Write-Host 'Obtenha manualmente a chave vigente no portal oficial do CNJ: https://www.cnj.jus.br/sistemas/datajud/api-publica/'
-Write-Host 'Confirme que a finalidade e o uso pretendido estão autorizados pelas regras vigentes.'
-$confirm = Read-Host 'Digite AUTORIZO para habilitar consultas DataJud sob sua responsabilidade'
-if ($confirm -cne 'AUTORIZO') { throw 'Configuração cancelada; nenhuma chave foi gravada.' }
-$secure = Read-Host 'Chave pública vigente do DataJud' -AsSecureString
-$ptr = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($secure)
-try { $key = [Runtime.InteropServices.Marshal]::PtrToStringBSTR($ptr) } finally { [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($ptr) }
-if ([string]::IsNullOrWhiteSpace($key) -or $key.Contains("`n") -or $key.Contains("`r")) { throw 'Chave vazia ou inválida.' }
-$lines = [System.Collections.Generic.List[string]](Get-Content -LiteralPath $envFile)
-foreach ($entry in @(@('DATAJUD_ENABLED','true'),@('DATAJUD_AUTHORIZED_USE','true'),@('DATAJUD_API_KEY',$key))) {
-  $name = $entry[0]; $value = $entry[1]; $found = $false
-  for ($i=0; $i -lt $lines.Count; $i++) { if ($lines[$i] -match "^$name=") { $lines[$i] = "$name=$value"; $found=$true; break } }
-  if (-not $found) { $lines.Add("$name=$value") }
-}
-$lines | Set-Content -LiteralPath $envFile -Encoding ascii
-$key = $null; $secure.Dispose()
-foreach ($name in @('COMPOSE_FILE','COMPOSE_PROJECT_NAME','POSTGRES_PASSWORD','PGPORT','RPY_API_PORT','RPY_BEARER_TOKENS','RPY_TENANT_PROCESSES','RPY_OPS_TOKEN','JUDIT_WEBHOOK_TOKEN','JUDIT_WEBHOOK_TENANT_ID','JUDIT_API_KEY','JUDIT_CALLBACK_URL','DATAJUD_ENABLED','DATAJUD_AUTHORIZED_USE','DATAJUD_API_KEY','DATAJUD_BASE_URL','ANTHROPIC_API_KEY','OPENAI_API_KEY')) { [Environment]::SetEnvironmentVariable($name, $null, 'Process') }
-Push-Location $project
+﻿$ErrorActionPreference = 'Stop'
+. (Join-Path $PSScriptRoot 'homologacao-common.ps1')
+Add-Type -AssemblyName System.Windows.Forms
 try {
-  docker compose --project-name $composeProject -f compose.yaml -f compose.homologacao.yaml up -d --no-build --no-deps --force-recreate api worker-1 worker-2 scheduler
-  if ($LASTEXITCODE -ne 0) { throw 'Falha ao recriar workers DataJud.' }
-} finally { Pop-Location }
-Write-Host 'DataJud ativado; nenhuma consulta foi enviada. Credencial configurada apenas no ambiente dos workers.'
-Read-Host 'Pressione Enter para fechar' | Out-Null
+    Initialize-HmlPaths
+    if (-not (Test-Path $script:HmlEnv)) { throw 'Abra o RagV Homologação uma vez antes de configurar o DataJud.' }
+    $settings = Get-HmlSettings
+    $form = New-Object Windows.Forms.Form
+    $form.Text = 'Configuração DataJud — RagV Homologação'
+    $form.Size = New-Object Drawing.Size(640,330)
+    $form.StartPosition = 'CenterScreen'
+    $form.FormBorderStyle = 'FixedDialog'
+    $form.MaximizeBox = $false
+    $link = New-Object Windows.Forms.LinkLabel
+    $link.Text = 'Obter a chave pública vigente na fonte oficial do CNJ'
+    $link.SetBounds(20,20,580,30)
+    $link.Add_LinkClicked({ Start-Process 'https://www.cnj.jus.br/sistemas/datajud/api-publica/' })
+    $form.Controls.Add($link)
+    $label = New-Object Windows.Forms.Label
+    $label.Text = 'Cole a chave vigente. Nenhuma consulta será enviada pela configuração.'
+    $label.SetBounds(20,60,580,35)
+    $form.Controls.Add($label)
+    $keyBox = New-Object Windows.Forms.TextBox
+    $keyBox.UseSystemPasswordChar = $true
+    $keyBox.SetBounds(20,100,580,26)
+    $form.Controls.Add($keyBox)
+    $optin = New-Object Windows.Forms.CheckBox
+    $optin.Text = 'Confirmo finalidade e uso autorizados pelas regras vigentes do CNJ.'
+    $optin.SetBounds(20,145,580,35)
+    $form.Controls.Add($optin)
+    $status = New-Object Windows.Forms.Label
+    $status.SetBounds(20,190,580,30)
+    $form.Controls.Add($status)
+    $save = New-Object Windows.Forms.Button
+    $save.Text = 'Salvar e ativar'
+    $save.SetBounds(20,235,150,32)
+    $form.Controls.Add($save)
+    $save.Add_Click({
+        try {
+            if (-not $optin.Checked) { throw 'Confirme o uso autorizado antes de ativar.' }
+            $key = $keyBox.Text.Trim() -replace '^APIKey\s+', ''
+            if ($key -notmatch '^[A-Za-z0-9_+/=:-]{16,2048}$') { throw 'Chave vazia ou formato inválido. Confira a fonte oficial do CNJ.' }
+            $save.Enabled = $false
+            $lines = @(Get-Content -LiteralPath $script:HmlEnv -Encoding UTF8)
+            $new = @($lines | Where-Object { $_ -notmatch '^DATAJUD_(API_KEY|ENABLED|AUTHORIZED_USE)=' })
+            $new += @('DATAJUD_ENABLED=true','DATAJUD_AUTHORIZED_USE=true',"DATAJUD_API_KEY=$key")
+            $tmp = "$($script:HmlEnv).new"
+            $new | Set-Content -LiteralPath $tmp -Encoding ASCII
+            Set-HmlPrivatePath $tmp
+            Move-Item -LiteralPath $tmp -Destination $script:HmlEnv -Force
+            $key = $null
+            $keyBox.Clear()
+            $script:HmlStatusLabel = $status
+            $compose = Get-HmlComposeArgs $settings
+            $null = Invoke-HmlDocker -Stage 'Aplicando configuração DataJud autorizada' -DockerArgs ($compose + @('up','-d','--no-build','--no-deps','--force-recreate','api','worker-1','worker-2','scheduler'))
+            $script:HmlStatusLabel = $null
+            $status.Text = 'DataJud configurado. Nenhuma consulta enviada.'
+            [Windows.Forms.MessageBox]::Show('DataJud ativado. A chave fica somente nos workers. Nenhuma consulta foi enviada.', 'Configuração concluída', 'OK', 'Information') | Out-Null
+            $form.Close()
+        } catch {
+            $save.Enabled = $true
+            [Windows.Forms.MessageBox]::Show($_.Exception.Message, 'Configuração DataJud — atenção', 'OK', 'Error') | Out-Null
+        }
+    })
+    [void]$form.ShowDialog()
+} catch {
+    [Windows.Forms.MessageBox]::Show($_.Exception.Message, 'RagV Homologação — atenção', 'OK', 'Error') | Out-Null
+    exit 1
+}

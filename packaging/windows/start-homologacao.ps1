@@ -1,103 +1,99 @@
-$ErrorActionPreference = 'Stop'
-# Evita herdar a versão de módulo do PowerShell 7 quando o atalho chama Windows PowerShell.
-Import-Module (Join-Path $PSHOME 'Modules/Microsoft.PowerShell.Security/Microsoft.PowerShell.Security.psd1') -ErrorAction Stop
-$profileRoot = Join-Path $env:LOCALAPPDATA 'RagV-Homologacao'
-$project = Join-Path $profileRoot 'project'
-$envFile = Join-Path $project '.env'
-$revision = 'a414b2a1d478ccfbf33611a7c40437dd3f90f3b7'
-$composeProject = $null
-
-function New-Secret([int]$Bytes = 32) {
-    $buffer = New-Object byte[] $Bytes
-    $rng = [System.Security.Cryptography.RandomNumberGenerator]::Create()
-    try { $rng.GetBytes($buffer) } finally { $rng.Dispose() }
-    return [Convert]::ToBase64String($buffer).TrimEnd('=').Replace('+','-').Replace('/','_')
-}
-function Get-FreePort([int]$Preferred) {
-    $listener = [System.Net.Sockets.TcpListener]::new([System.Net.IPAddress]::Loopback, $Preferred)
-    try { $listener.Start(); return $Preferred }
-    catch {
-        $listener = [System.Net.Sockets.TcpListener]::new([System.Net.IPAddress]::Loopback, 0)
-        $listener.Start(); return ([System.Net.IPEndPoint]$listener.LocalEndpoint).Port
-    }
-    finally { $listener.Stop() }
-}
-
+﻿$ErrorActionPreference = 'Stop'
+. (Join-Path $PSScriptRoot 'homologacao-common.ps1')
+Add-Type -AssemblyName System.Windows.Forms
+$progress = $null
 try {
-    if (-not (Test-Path (Join-Path $project 'compose.yaml'))) { throw "Pacote de homologação não encontrado em $project. Reinstale o instalador." }
-    if (-not (Test-Path $envFile)) {
-        $db = New-Secret
-        $token = New-Secret
+    Initialize-HmlPaths
+    $progress = New-Object Windows.Forms.Form
+    $progress.Text = 'RagV Homologação — inicialização'
+    $progress.Size = New-Object Drawing.Size(540,150)
+    $progress.StartPosition = 'CenterScreen'
+    $progress.FormBorderStyle = 'FixedDialog'
+    $progress.ControlBox = $false
+    $script:HmlStatusLabel = New-Object Windows.Forms.Label
+    $script:HmlStatusLabel.Dock = 'Fill'
+    $script:HmlStatusLabel.Padding = New-Object Windows.Forms.Padding(20)
+    $script:HmlStatusLabel.Text = 'Preparando o ambiente de homologação…'
+    $progress.Controls.Add($script:HmlStatusLabel)
+    $progress.Show()
+    [Windows.Forms.Application]::DoEvents()
+    if (-not (Test-Path $script:HmlEnv)) {
+        function New-HmlSecret {
+            $bytes = New-Object byte[] 32
+            $rng = [Security.Cryptography.RandomNumberGenerator]::Create()
+            try { $rng.GetBytes($bytes) } finally { $rng.Dispose() }
+            return [Convert]::ToBase64String($bytes).TrimEnd('=').Replace('+','-').Replace('/','_')
+        }
+        $listener = [Net.Sockets.TcpListener]::new([Net.IPAddress]::Loopback, 18080)
+        try { $listener.Start() } catch { $listener = [Net.Sockets.TcpListener]::new([Net.IPAddress]::Loopback, 0); $listener.Start() }
+        try { $port = ([Net.IPEndPoint]$listener.LocalEndpoint).Port } finally { $listener.Stop() }
+        $token = New-HmlSecret
         $tenant = [guid]::NewGuid().ToString()
-        $apiPort = Get-FreePort 18080
-        $composeProject = 'ragv-hml-' + ([guid]::NewGuid().ToString('N').Substring(0, 12))
+        $projectName = 'ragv-hml-' + [guid]::NewGuid().ToString('N').Substring(0,12)
+        $newEnv = "$($script:HmlEnv).new"
         @(
-            "COMPOSE_PROJECT_NAME=$composeProject"
-            "POSTGRES_PASSWORD=$db"
-            "RPY_OPS_TOKEN=$(New-Secret)"
-            "JUDIT_WEBHOOK_TOKEN=$(New-Secret)"
-            "RPY_API_PORT=$apiPort"
+            "COMPOSE_PROJECT_NAME=$projectName"
+            "POSTGRES_PASSWORD=$(New-HmlSecret)"
+            "RPY_OPS_TOKEN=$(New-HmlSecret)"
+            "JUDIT_WEBHOOK_TOKEN=$(New-HmlSecret)"
+            "RPY_API_PORT=$port"
             'RPY_TENANT_PROCESSES={}'
             "RPY_BEARER_TOKENS={`"$token`":`"$tenant`"}"
-            'RPY_DEMO_BEARER_TOKEN='
             'DATAJUD_ENABLED=false'
             'DATAJUD_AUTHORIZED_USE=false'
             'DATAJUD_API_KEY='
             'JUDIT_API_KEY='
             'ANTHROPIC_API_KEY='
             'OPENAI_API_KEY='
-        ) | Set-Content -LiteralPath "$envFile.new" -Encoding ascii
-        $acl = Get-Acl "$envFile.new"
-        $acl.SetAccessRuleProtection($true, $false)
-        $identity = [System.Security.Principal.WindowsIdentity]::GetCurrent().Name
-        $rule = New-Object System.Security.AccessControl.FileSystemAccessRule($identity,'FullControl','Allow')
-        $acl.SetAccessRule($rule)
-        Set-Acl -LiteralPath "$envFile.new" -AclObject $acl
-        $tokenFile = Join-Path $profileRoot 'access-token.txt'
-        Set-Content -LiteralPath $tokenFile -Value $token -Encoding ascii
-        Set-Acl -LiteralPath $tokenFile -AclObject $acl
-        Move-Item -LiteralPath "$envFile.new" -Destination $envFile
-        Set-Content -LiteralPath (Join-Path $profileRoot 'diagnostics.txt') -Value "RagV Homologação`nVersão 0.1.1-hml`nSHA da aplicação $revision`nCompose $composeProject`nAPI http://127.0.0.1:$apiPort`nTenant sintético $tenant" -Encoding utf8
+        ) | Set-Content -LiteralPath $newEnv -Encoding ASCII
+        Set-HmlPrivatePath $newEnv
+        $tokenFile = Join-Path $script:HmlRoot 'access-token.txt'
+        Set-Content -LiteralPath $tokenFile -Value $token -Encoding ASCII
+        Set-HmlPrivatePath $tokenFile
+        Move-Item -LiteralPath $newEnv -Destination $script:HmlEnv
     }
-    $envLines = Get-Content -LiteralPath $envFile
-    # Não herdar credenciais/configuração de outras instalações do shell do usuário.
-    $composeNames = @('COMPOSE_FILE','COMPOSE_PROJECT_NAME','POSTGRES_PASSWORD','PGPORT','RPY_API_PORT','RPY_BEARER_TOKENS','RPY_TENANT_PROCESSES','RPY_OPS_TOKEN','JUDIT_WEBHOOK_TOKEN','JUDIT_WEBHOOK_TENANT_ID','JUDIT_API_KEY','JUDIT_CALLBACK_URL','JUDIT_ATTACHMENTS_ENABLED','JUDIT_ATTACHMENT_DOWNLOAD_MODE','DATAJUD_ENABLED','DATAJUD_AUTHORIZED_USE','DATAJUD_API_KEY','DATAJUD_BASE_URL','DATAJUD_TIMEOUT_SECONDS','ANTHROPIC_API_KEY','OPENAI_API_KEY')
-    foreach ($name in $composeNames) { [Environment]::SetEnvironmentVariable($name, $null, 'Process') }
-    if (-not $composeProject) { $composeProject = (($envLines | Where-Object { $_ -like 'COMPOSE_PROJECT_NAME=*' } | Select-Object -First 1) -replace '^COMPOSE_PROJECT_NAME=','') }
-    if ($composeProject -notmatch '^ragv-hml-[a-f0-9]{12}$') { throw 'Identificador de perfil de homologação inválido.' }
-    $apiPort = [int](($envLines | Where-Object { $_ -like 'RPY_API_PORT=*' } | Select-Object -First 1) -replace '^RPY_API_PORT=','')
-    $env:RPY_DESKTOP_URL = "http://127.0.0.1:$apiPort"
-    Push-Location $project
-    try {
-        docker info *> $null
-        if ($LASTEXITCODE -ne 0) { throw 'Docker Desktop precisa estar iniciado e usando containers Linux.' }
-        docker compose --project-name $composeProject -f compose.yaml -f compose.homologacao.yaml config --quiet
-        if ($LASTEXITCODE -ne 0) { throw 'Configuração Docker inválida.' }
-        $packageLine = Get-Content (Join-Path $project 'HOMOLOGACAO.txt') | Where-Object { $_ -like 'Package SHA: *' }
-        $packageSha = $packageLine -replace '^Package SHA: ', ''
-        if ($packageSha -notmatch '^[a-f0-9]{40}$') { throw 'Identidade do pacote ausente ou inválida.' }
-        $imageTag = "ragv-homologacao:$($packageSha.Substring(0,12))"
-        $imageIds = @(docker image ls --quiet --filter "reference=$imageTag")
-        $imageExists = ($imageIds.Count -gt 0)
-        if (-not $imageExists) {
-            docker compose --project-name $composeProject -f compose.yaml -f compose.homologacao.yaml build api
-            if ($LASTEXITCODE -ne 0) { throw 'Falha ao construir imagens de homologação.' }
-        }
-        docker compose --project-name $composeProject -f compose.yaml -f compose.homologacao.yaml up -d --no-build postgres migrate api worker-1 worker-2 scheduler
-        if ($LASTEXITCODE -ne 0) { throw 'Falha ao iniciar serviços de homologação.' }
-        $ready = $false
-        for ($i=0; $i -lt 90; $i++) {
-            try { $r=Invoke-WebRequest -Uri "$($env:RPY_DESKTOP_URL)/ready" -UseBasicParsing -TimeoutSec 3; if ($r.StatusCode -eq 200) { $ready=$true; break } } catch { Start-Sleep -Seconds 2 }
-        }
-        if (-not $ready) { throw 'API não ficou pronta; consulte docker compose logs no diretório de homologação.' }
-        docker compose --project-name $composeProject -f compose.yaml -f compose.homologacao.yaml run --rm --no-deps api python scripts/bootstrap_homologation.py
-        if ($LASTEXITCODE -ne 0) { throw 'Falha ao preparar tenant vazio de homologação.' }
-        & (Join-Path $PSScriptRoot 'RagVDesktop.exe')
-        if ($LASTEXITCODE -ne 0) { throw "RagVDesktop encerrou com código $LASTEXITCODE." }
-    } finally { Pop-Location }
+    $settings = Get-HmlSettings
+    $compose = Get-HmlComposeArgs $settings
+    $metadata = Get-Content (Join-Path $script:HmlRuntime 'HOMOLOGACAO.txt') -Encoding UTF8
+    $packageSha = (($metadata | Where-Object { $_ -like 'Package SHA: *' }) -replace '^Package SHA: ', '')
+    if ($packageSha -notmatch '^[a-f0-9]{40}$') { throw 'Identidade do pacote inválida.' }
+    $imageTag = 'ragv-homologacao:' + $packageSha.Substring(0,12)
+    $metadata + @("Compose: $($settings.COMPOSE_PROJECT_NAME)","API: http://127.0.0.1:$($settings.RPY_API_PORT)","Runtime: $script:HmlRuntime") | Set-Content (Join-Path $script:HmlRoot 'diagnostics.txt') -Encoding UTF8
+    $osType = Invoke-HmlDocker -Stage 'Verificando Docker Desktop (containers Linux)' -DockerArgs @('info','--format','{{.OSType}}')
+    if ($osType.Trim() -ne 'linux') { throw 'Configure Docker Desktop para containers Linux.' }
+    $null = Invoke-HmlDocker -Stage 'Validando configuração isolada' -DockerArgs ($compose + @('config','--quiet'))
+    $images = Invoke-HmlDocker -Stage 'Verificando imagem desta revisão' -DockerArgs @('image','ls','--quiet','--filter',"reference=$imageTag")
+    if ([string]::IsNullOrWhiteSpace($images)) {
+        $null = Invoke-HmlDocker -Stage 'Construindo imagem (primeira abertura; pode demorar)' -DockerArgs ($compose + @('build','api'))
+    }
+    # Migração termina antes da API; nenhum volume/projeto habitual é selecionado.
+    $null = Invoke-HmlDocker -Stage 'Iniciando PostgreSQL, migração, API e workers' -DockerArgs ($compose + @('up','-d','--no-build','postgres','migrate','api','worker-1','worker-2','scheduler'))
+    $script:HmlStage = 'Aguardando API e PostgreSQL'
+    $script:HmlStatusLabel.Text = $script:HmlStage
+    $url = "http://127.0.0.1:$($settings.RPY_API_PORT)"
+    $ready = $false
+    for ($i=0; $i -lt 90; $i++) {
+        try { $response = Invoke-WebRequest -Uri "$url/ready" -UseBasicParsing -TimeoutSec 2; if ($response.StatusCode -eq 200) { $ready=$true; break } } catch { }
+        [Windows.Forms.Application]::DoEvents()
+        Start-Sleep -Milliseconds 1000
+    }
+    if (-not $ready) { Write-HmlEvent $script:HmlStage 1; throw 'API/PostgreSQL não ficaram prontos no prazo. Nenhum tenant foi ignorado.' }
+    # exec usa a API já saudável e seu ambiente real, não um migrate sem Bearer.
+    $tenantReport = Invoke-HmlDocker -Stage 'Preparando e verificando tenant de homologação' -DockerArgs ($compose + @('exec','-T','api','python','scripts/bootstrap_homologation.py'))
+    $report = $tenantReport | ConvertFrom-Json
+    if ($report.status -ne 'ready' -or -not $report.tenant_exists -or $report.migration -ne '034_acquisition_authorizations.sql') { throw 'A verificação do tenant não confirmou o ambiente. Abertura cancelada.' }
+    Remove-Item -LiteralPath (Join-Path $script:HmlRoot 'last-error.txt') -ErrorAction SilentlyContinue
+    $script:HmlStage = 'Abrindo RagV / Grupo Villela'
+    $env:RPY_DESKTOP_URL = $url
+    $progress.Close()
+    $progress = $null
+    $script:HmlStatusLabel = $null
+    $desktop = Start-Process -FilePath (Join-Path $PSScriptRoot 'RagVDesktop.exe') -PassThru -Wait
+    if ($desktop.ExitCode -ne 0) { throw "A janela RagV encerrou com código $($desktop.ExitCode)." }
+    Write-HmlEvent 'Janela encerrada normalmente' 0
 } catch {
-    $_ | Out-String | Set-Content -LiteralPath (Join-Path $profileRoot 'last-error.txt') -Encoding utf8
-    Add-Type -AssemblyName System.Windows.Forms
-    [System.Windows.Forms.MessageBox]::Show($_.Exception.Message, 'RagV Homologação', 'OK', 'Error') | Out-Null
+    if ($progress) { $progress.Close() }
+    if (Test-Path $script:HmlRoot) { "Etapa: $script:HmlStage`r`n$($_.Exception.Message)" | Set-Content (Join-Path $script:HmlRoot 'last-error.txt') -Encoding UTF8 }
+    [Windows.Forms.MessageBox]::Show($_.Exception.Message, 'RagV Homologação — atenção', 'OK', 'Error') | Out-Null
     exit 1
 }

@@ -1,4 +1,4 @@
-$ErrorActionPreference = 'Stop'
+﻿$ErrorActionPreference = 'Stop'
 Add-Type -AssemblyName System.Windows.Forms
 $path = Join-Path $env:LOCALAPPDATA 'RagV-Homologacao\access-token.txt'
 if (-not (Test-Path $path)) {
