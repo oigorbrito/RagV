@@ -71,7 +71,10 @@ def main():
         height=800,
         min_size=(800, 600),
     )
-    window.events.loaded += lambda: _inject_managed_token(window)
+    def on_loaded(*_args):
+        _inject_managed_token(window)
+
+    window.events.loaded += on_loaded
     webview.start()
     return 0
 
