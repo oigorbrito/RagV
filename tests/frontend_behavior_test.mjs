@@ -1085,7 +1085,7 @@ await scenario("DataJud sem autorização de uso no servidor permanece desabilit
         judit: { name: "Judit", configured: true, enabled: true, experimental: false },
         datajud: {
           name: "DataJud",
-          configured: true,
+          configured: false,
           enabled: false,
           experimental: true,
           reason_unavailable: "Uso de DataJud não autorizado explicitamente (DATAJUD_AUTHORIZED_USE=false).",
