@@ -49,6 +49,12 @@ worker ownership, attempts and retry classification are unchanged. This is an
 in-process boundary test with a fake queue connection, not a PostgreSQL durability
 or restore claim.
 
+New test checks raise explicit failures rather than relying on removable bare
+assert statements. A negative control compiling the test with optimization and
+a deliberately incorrect sanitizer reproduced the static-analysis finding;
+explicit failures retain the check under optimization. No analyzer rule or
+workflow was disabled, and no finding suppression is added by this slice.
+
 The helper is not a general PII scrubber or a detector for arbitrary unlabelled
 secrets. Malformed/truncated quote grammars, adversarial large-input performance
 and all end-to-end logging consumers remain outside this bounded evidence.

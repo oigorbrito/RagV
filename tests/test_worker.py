@@ -193,13 +193,15 @@ async def test_worker_redacts_secret_from_error_log_and_runtime_log(
     assert all(record.exc_info is None for record in caplog.records)
     for rendered in (failed[0], rendered_logs):
         for synthetic_secret in extra_secrets:
-            assert synthetic_secret not in rendered  # nosec B101
-        assert "request_id=diagnostic-252" in rendered  # nosec B101
-        assert "status=502" in rendered  # nosec B101
-    assert failure_calls == [{  # nosec B101
+            if synthetic_secret in rendered:
+                raise AssertionError("Worker output retained a synthetic credential")
+        if "request_id=diagnostic-252" not in rendered or "status=502" not in rendered:
+            raise AssertionError("Worker output lost public diagnostic context")
+    if failure_calls != [{
         "job_id": row["id"], "worker_id": worker.worker_id,
         "attempts": row["attempts"], "permanent": False,
-    }]
+    }]:
+        raise AssertionError("Redaction changed queue-failure identity or retry classification")
 
 
 class _Trace:

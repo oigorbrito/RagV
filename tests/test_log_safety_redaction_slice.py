@@ -33,10 +33,13 @@ CASES = [
 def test_sensitive_values_removed_diagnostics_retained(value, secrets, preserve):
     rendered = sanitize_error_message(value)
     for secret in secrets:
-        assert secret not in rendered
+        if secret in rendered:
+            raise AssertionError("Synthetic credential remained in sanitized output")
     for useful in preserve:
-        assert useful in rendered
-    assert REDACTED in rendered
+        if useful not in rendered:
+            raise AssertionError("Non-sensitive diagnostic context was lost")
+    if REDACTED not in rendered:
+        raise AssertionError("Expected credential redaction marker")
 
 @pytest.mark.parametrize('value', [
     'GET /health status=503 request_id=abc host=db.test duration_ms=12',
@@ -46,38 +49,48 @@ def test_sensitive_values_removed_diagnostics_retained(value, secrets, preserve)
     'public_key_identifier=fixture-01 webhook_attempt=3 callback_status=retry',
 ])
 def test_non_sensitive_diagnostics_unchanged(value):
-    assert sanitize_error_message(value) == value
+    if sanitize_error_message(value) != value:
+        raise AssertionError("Non-sensitive diagnostic text changed")
 
 @pytest.mark.parametrize('key', ['pwd', 'passwd', 'credential', 'credentials', 'webhook_key', 'callback-key'])
 def test_already_masked_values_remain_stable(key):
     value = f'{key}={REDACTED} status=403'
-    assert sanitize_error_message(value) == value
+    if sanitize_error_message(value) != value:
+        raise AssertionError("Previously masked credential marker changed")
 
 @settings(max_examples=160, deadline=None, derandomize=True)
 @given(key=st.sampled_from(['pwd', 'passwd', 'credential', 'credentials', 'webhook_key', 'callback_key', 'callback_token', 'webhook_secret']), quote=st.sampled_from(['', '"', "'"]), secret=st.text(alphabet='abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_-', min_size=12, max_size=48))
 def test_generated_keys_and_token_values(key, quote, secret):
     text = f'{key}={quote}{secret}{quote} request_id=abc status=500'
     rendered = sanitize_error_message(text)
-    assert secret not in rendered
-    assert 'request_id=abc status=500' in rendered
+    if secret in rendered:
+        raise AssertionError("Generated synthetic credential remained visible")
+    if 'request_id=abc status=500' not in rendered:
+        raise AssertionError("Generated fixture lost public diagnostic context")
 
 @settings(max_examples=100, deadline=None, derandomize=True)
 @given(secret=st.text(alphabet='abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 _-;,', min_size=12, max_size=48))
 def test_quoted_json_value_redacts_entire_value(secret):
     text = json.dumps({'callback_key': 'SYNTHETIC_PREFIX_' + secret, 'status': 'retry'})
     rendered = sanitize_error_message(text)
-    assert 'SYNTHETIC_PREFIX_' not in rendered
-    assert json.loads(rendered) == {'callback_key': REDACTED, 'status': 'retry'}
+    if 'SYNTHETIC_PREFIX_' in rendered:
+        raise AssertionError("Quoted synthetic credential remained visible")
+    if json.loads(rendered) != {'callback_key': REDACTED, 'status': 'retry'}:
+        raise AssertionError("Quoted redaction changed the non-sensitive JSON structure")
 
 def test_configured_secret_with_spaces_is_removed(monkeypatch):
     monkeypatch.setenv('DATAJUD_API_KEY', 'SYNTHETIC configured secret 250')
     rendered = sanitize_error_message('DataJud error SYNTHETIC configured secret 250 status=401')
-    assert 'SYNTHETIC configured secret 250' not in rendered
-    assert 'DataJud error' in rendered and 'status=401' in rendered
+    if 'SYNTHETIC configured secret 250' in rendered:
+        raise AssertionError("Configured synthetic DataJud credential remained visible")
+    if 'DataJud error' not in rendered or 'status=401' not in rendered:
+        raise AssertionError("Configured-secret redaction lost public diagnostics")
 
 @pytest.mark.parametrize('limit', [0, 1, 12, 80, 2000])
 def test_bound_applies_after_redaction(limit):
     value = ('callback_key=SYNTHETIC_VALUE_250 request_id=abc ' * 100)
     rendered = sanitize_error_message(value, max_chars=limit)
-    assert len(rendered) <= limit
-    assert 'SYNTHETIC_VALUE_250' not in rendered
+    if len(rendered) > limit:
+        raise AssertionError("Sanitized output exceeded the requested bound")
+    if 'SYNTHETIC_VALUE_250' in rendered:
+        raise AssertionError("Bounded output retained a synthetic credential")
