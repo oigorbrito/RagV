@@ -56,6 +56,7 @@ exclude = ["tests*", "scripts*", "sql*", "docs*"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
+pythonpath = ["."]
 
 [tool.ruff]
 target-version = "py312"
