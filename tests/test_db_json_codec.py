@@ -33,8 +33,11 @@ def test_encode_json_wraps_ambiguous_pre_serialized_json_as_plain_string() -> No
             )
 
 
-def test_encode_json_preserves_excessively_nested_text_as_plain_string() -> None:
-    raw = "[" * 4000 + "0" + "]" * 4000
+def test_encode_json_preserves_excessively_nested_text_as_plain_string(
+    parser_rejected_json_depth: int,
+) -> None:
+    depth = parser_rejected_json_depth
+    raw = "[" * depth + "0" + "]" * depth
     encoded = _encode_json(raw)
     if json.loads(encoded) != raw:
         raise AssertionError("Rejected nested JSON text was not preserved as a plain string")

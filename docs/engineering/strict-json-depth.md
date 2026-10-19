@@ -33,14 +33,20 @@ Recovered from the frozen Block249 **G** entry
 - Production helper patch is equivalent to that source; no branch merge or
   unrelated historical code was imported.
 
-The source's 2,000-level fixture is accepted by the actual local Python
-3.12.10 parser. Its initial failure is retained as a fixture-portability
-observation, not falsely reported as the runtime defect. A bounded standalone
-probe found 4,000 levels raises `RecursionError`; the adapted fixture reproduced
-12 failures across parser/input types, HTTP and PostgreSQL codec boundaries
-before applying the production fix. There is **no new fixed 4,000-level policy**:
-that number identifies a regression fixture for the recorded runtime, not a
-universal parser limit or performance threshold.
+The source's 2,000-level fixture is accepted by local Windows Python 3.12.10.
+A 4,000-level fixture reproduced 12 failures across parser/input types, HTTP
+and PostgreSQL codec boundaries before applying the production fix. Linux
+Python 3.12.14 accepts that fixture too, and rejects 16,000 levels instead.
+Both failed fixed-fixture attempts and the native parser probes are retained
+as portability evidence, not falsely reported as production regressions.
+
+The session fixture now probes standard-library `json.loads` with a bounded
+candidate list and chooses an actual `RecursionError` for the current runtime;
+JUnit records that selected depth. It does not call the patched helper, alter
+recursion settings, skip assertions or create a new production depth policy.
+If the parser accepts all candidates, the fixture explicitly fails for review.
+These values are a test-input budget, not universal limits or performance
+thresholds. Production remains exactly the recovered exception normalization.
 
 Source G classifications are unchanged. No open PR examined touched these
 JSON paths; #514 changes separate logging paths and is not a prerequisite.

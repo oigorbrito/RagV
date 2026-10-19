@@ -17,7 +17,9 @@ pytestmark = pytest.mark.skipif(
 
 
 @pytest.mark.asyncio
-async def test_rejected_nested_json_text_roundtrips_as_a_jsonb_string() -> None:
+async def test_rejected_nested_json_text_roundtrips_as_a_jsonb_string(
+    parser_rejected_json_depth: int,
+) -> None:
     if not TEST_DATABASE_URL:
         raise RuntimeError("A disposable TEST_DATABASE_URL is required")
     conn = await asyncpg.connect(TEST_DATABASE_URL)
@@ -26,7 +28,8 @@ async def test_rejected_nested_json_text_roundtrips_as_a_jsonb_string() -> None:
             "jsonb", schema="pg_catalog", encoder=_encode_json, decoder=json.loads,
             format="text",
         )
-        raw = "[" * 4000 + "0" + "]" * 4000
+        depth = parser_rejected_json_depth
+        raw = "[" * depth + "0" + "]" * depth
         kind = await conn.fetchval("SELECT jsonb_typeof($1::jsonb)", raw)
         decoded = await conn.fetchval("SELECT $1::jsonb", raw)
         if kind != "string" or decoded != raw:

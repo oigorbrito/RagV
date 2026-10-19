@@ -46,25 +46,34 @@ def test_shared_json_decoder_uses_strict_semantics(payload: str) -> None:
         decode_json_value(payload)
 
 
-def test_strict_json_rejects_pathological_nesting_as_value_error() -> None:
-    payload = "[" * 4000 + "0" + "]" * 4000
+def test_strict_json_rejects_pathological_nesting_as_value_error(
+    parser_rejected_json_depth: int,
+) -> None:
+    depth = parser_rejected_json_depth
+    payload = "[" * depth + "0" + "]" * depth
     with pytest.raises(ValueError, match="nesting exceeds safe parser depth"):
         loads_strict_json(payload)
 
 
 @pytest.mark.parametrize("representation", [str, bytes, bytearray])
 @pytest.mark.parametrize("container", ["array", "object"])
-def test_strict_json_depth_failure_preserves_input_contract(representation, container) -> None:
+def test_strict_json_depth_failure_preserves_input_contract(
+    representation, container, parser_rejected_json_depth: int,
+) -> None:
+    depth = parser_rejected_json_depth
     if container == "array":
-        payload = "[" * 4000 + "0" + "]" * 4000
+        payload = "[" * depth + "0" + "]" * depth
     else:
-        payload = '{"nested":' * 4000 + "0" + "}" * 4000
+        payload = '{"nested":' * depth + "0" + "}" * depth
     value = payload if representation is str else representation(payload, "utf-8")
     with pytest.raises(ValueError, match="nesting exceeds safe parser depth"):
         loads_strict_json(value)
 
 
-def test_shared_json_decoder_normalizes_excessive_nesting() -> None:
-    payload = "[" * 4000 + "0" + "]" * 4000
+def test_shared_json_decoder_normalizes_excessive_nesting(
+    parser_rejected_json_depth: int,
+) -> None:
+    depth = parser_rejected_json_depth
+    payload = "[" * depth + "0" + "]" * depth
     with pytest.raises(ValueError, match="nesting exceeds safe parser depth"):
         decode_json_value(payload)

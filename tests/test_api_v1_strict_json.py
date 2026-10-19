@@ -110,7 +110,10 @@ async def test_missing_idempotency_key_fails_before_malformed_body_parsing() -> 
 
 
 @pytest.mark.asyncio
-async def test_v1_summary_request_rejects_excessive_nesting_before_auth() -> None:
+async def test_v1_summary_request_rejects_excessive_nesting_before_auth(
+    parser_rejected_json_depth: int,
+) -> None:
+    depth = parser_rejected_json_depth
     transport = httpx.ASGITransport(app=app, raise_app_exceptions=False)
     async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
         response = await client.post(
@@ -119,6 +122,6 @@ async def test_v1_summary_request_rejects_excessive_nesting_before_auth() -> Non
                 "Content-Type": "application/json",
                 "Idempotency-Key": "synthetic-depth-253",
             },
-            content='{"unused":' + "[" * 4000 + "0" + "]" * 4000 + "}",
+            content='{"unused":' + "[" * depth + "0" + "]" * depth + "}",
         )
     _require_400(response, "request body must contain strict JSON")
