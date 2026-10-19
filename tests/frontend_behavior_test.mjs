@@ -998,6 +998,8 @@ await scenario("DataJud submits an idempotent job and renders its queued API res
     jsonResponse(200, { code: VALID_CODE, source: "datajud", court: "TJRS", class_name: "Classe pública", subjects: [], parties: [] }),
   ], { hasExplicitCapabilities: true });
   await new Promise(resolve => setTimeout(resolve, 0));
+  assert.equal(ui.elements["source-datajud"].disabled, false);
+  assert.equal(ui.elements["datajud-status-hint"].textContent, "");
   await ui.changeRadio("source-datajud");
   await ui.search();
   assert.equal(ui.requests[1].options.method, "POST");
@@ -1067,8 +1069,11 @@ await scenario("DataJud desabilitado por padrão no servidor", async () => {
   ], { hasExplicitCapabilities: true });
   await new Promise(r => setTimeout(r, 10));
   assert.equal(ui.elements["source-datajud"].disabled, true);
-  assert.equal(ui.elements["datajud-status-hint"].textContent, "DataJud indisponível");
-  assert.ok(!ui.elements["datajud-status-hint"].textContent.includes("DATAJUD_ENABLED"));
+  const statusHint = ui.elements["datajud-status-hint"].textContent;
+  assert.equal(statusHint, "DataJud desabilitado por padrão no servidor (DATAJUD_ENABLED=false).");
+  assert.ok(!statusHint.includes("DATAJUD_API_KEY"));
+  assert.ok(!statusHint.includes("JUDIT_API_KEY"));
+  assert.ok(!statusHint.toLowerCase().includes("secret"));
 });
 
 await scenario("DataJud sem autorização de uso no servidor permanece desabilitado", async () => {
@@ -1083,7 +1088,7 @@ await scenario("DataJud sem autorização de uso no servidor permanece desabilit
           configured: true,
           enabled: false,
           experimental: true,
-          reason_unavailable: "DataJud não autorizado (DATAJUD_AUTHORIZED_USE=true obrigatório).",
+          reason_unavailable: "Uso de DataJud não autorizado explicitamente (DATAJUD_AUTHORIZED_USE=false).",
         },
       },
     }),
@@ -1091,8 +1096,11 @@ await scenario("DataJud sem autorização de uso no servidor permanece desabilit
   await new Promise(r => setTimeout(r, 10));
 
   assert.equal(ui.elements["source-datajud"].disabled, true);
-  assert.equal(ui.elements["datajud-status-hint"].textContent, "DataJud indisponível");
-  assert.ok(!ui.elements["datajud-status-hint"].textContent.includes("DATAJUD_AUTHORIZED_USE"));
+  const statusHint = ui.elements["datajud-status-hint"].textContent;
+  assert.equal(statusHint, "Uso de DataJud não autorizado explicitamente (DATAJUD_AUTHORIZED_USE=false).");
+  assert.ok(!statusHint.includes("DATAJUD_API_KEY"));
+  assert.ok(!statusHint.includes("JUDIT_API_KEY"));
+  assert.ok(!statusHint.toLowerCase().includes("secret"));
 });
 
 await scenario("ausência de exposição de segredos em tela ou requisições", async () => {
