@@ -6,6 +6,10 @@ const APP_PATH = "app/frontend/app.js";
 const CSS_PATH = "app/frontend/app.css";
 const VALID_CODE = "0000000-00.2026.8.21.0001";
 const TOKEN = "test-token";
+const FIXED_NOW = Date.parse("2026-01-01T00:30:00.000Z");
+const DAY_SECONDS = 24 * 60 * 60;
+const timestampAtElapsedSeconds = (seconds, now = FIXED_NOW) =>
+  new Date(now - seconds * 1000).toISOString();
 
 const ids = [
   "search-form","process-code","process-code-error","bearer-token","token-error",
@@ -159,7 +163,7 @@ function readyPayload(overrides = {}) {
   };
 }
 
-function createHarness(fetchResponses, { apiBase = "same-origin", hasExplicitCapabilities = false } = {}) {
+function createHarness(fetchResponses, { apiBase = "same-origin", hasExplicitCapabilities = false, now = FIXED_NOW } = {}) {
   const elements = Object.fromEntries(ids.map(id => [id, new Element(id)]));
   const requests = [];
   const capabilitiesRequests = [];
@@ -201,6 +205,9 @@ function createHarness(fetchResponses, { apiBase = "same-origin", hasExplicitCap
   const context = {
     document,
     console,
+    Date: class extends Date {
+      static now() { return now; }
+    },
     TypeError,
     URL,
     requestAnimationFrame: callback => callback(),
@@ -301,6 +308,25 @@ async function scenario(name, body) {
     error.message = `${name}: ${error.message}`;
     throw error;
   }
+}
+
+async function renderHistoryItem(updatedAt, now = FIXED_NOW) {
+  const ui = createHarness([
+    jsonResponse(200, {
+      items: [{
+        code: VALID_CODE,
+        court: "TJRS",
+        class_name: "Procedimento Comum",
+        updated_at: updatedAt,
+        acquisition_status: "completed",
+      }],
+      total: 1,
+    }),
+    jsonResponse(200, { items: [] }),
+  ], { now });
+  ui.elements["bearer-token"].value = TOKEN;
+  await ui.click("history-trigger");
+  return ui;
 }
 
 await scenario("configured Pages API base uses the backend origin", async () => {
@@ -862,7 +888,7 @@ await scenario("listagem de histórico exibe processos do tenant e permite abrir
           code: VALID_CODE,
           court: "TJRS",
           class_name: "Procedimento Comum",
-          updated_at: "2026-09-18T12:00:00Z",
+          updated_at: timestampAtElapsedSeconds(3 * DAY_SECONDS),
           acquisition_status: "completed",
         },
       ],
@@ -875,7 +901,9 @@ await scenario("listagem de histórico exibe processos do tenant e permite abrir
   ui.elements["bearer-token"].value = TOKEN;
   await ui.click("history-trigger");
 
-  assert.match(ui.elements["history-list"].children[0].renderedText, /Consultado há/);
+  const historyText = ui.elements["history-list"].children[0].renderedText;
+  assert.match(historyText, /Consultado há 3 dias/);
+  console.log(`history sample: ${historyText}`);
   assert.equal(ui.elements["history-panel"].hidden, false);
   assert.equal(ui.requests.length, 2);
   assert.equal(ui.requests[0].url, "/processes?limit=50");
@@ -889,6 +917,34 @@ await scenario("listagem de histórico exibe processos do tenant e permite abrir
   assert.equal(ui.requests.length, 3);
   assert.equal(ui.requests[2].url, `/processes/${encodeURIComponent(VALID_CODE)}`);
   assert.equal(ui.elements["result"].hidden, false);
+});
+
+await scenario("relative history labels use a fixed clock and pt-BR elapsed thresholds", async () => {
+  const cases = [
+    { name: "future is clamped to now", elapsedSeconds: -1, expected: "agora" },
+    { name: "under one minute", elapsedSeconds: 59, expected: "agora" },
+    { name: "minute boundary", elapsedSeconds: 60, expected: "há 1 minuto" },
+    { name: "before day boundary", elapsedSeconds: DAY_SECONDS - 1, expected: "há 23 horas" },
+    { name: "day boundary", elapsedSeconds: DAY_SECONDS, expected: "ontem" },
+    { name: "before 30-day month threshold", elapsedSeconds: 30 * DAY_SECONDS - 1, expected: "há 29 dias" },
+    { name: "30-day month threshold", elapsedSeconds: 30 * DAY_SECONDS, expected: "mês passado" },
+    { name: "before 365-day year threshold", elapsedSeconds: 365 * DAY_SECONDS - 1, expected: "há 12 meses" },
+    { name: "365-day year threshold", elapsedSeconds: 365 * DAY_SECONDS, expected: "ano passado" },
+  ];
+
+  for (const testCase of cases) {
+    const ui = await renderHistoryItem(timestampAtElapsedSeconds(testCase.elapsedSeconds));
+    const renderedText = ui.elements["history-list"].children[0].renderedText;
+    const match = renderedText.match(/Consultado (.+?)Armazenado/);
+    assert.ok(match, `${testCase.name}: expected a relative-time label in ${renderedText}`);
+    assert.equal(match[1], testCase.expected, testCase.name);
+    console.log(`relative-history ${testCase.name}: Consultado ${match[1]}`);
+  }
+
+  const invalidDateUi = await renderHistoryItem("not-a-date");
+  const invalidDateText = invalidDateUi.elements["history-list"].children[0].renderedText;
+  assert.doesNotMatch(invalidDateText, /Consultado /);
+  console.log("relative-history invalid timestamp: no consultation label");
 });
 
 await scenario("consulta realizada no mesmo dia destaca aviso de consulta recente", async () => {
