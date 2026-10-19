@@ -42,6 +42,7 @@ def _mock_docker_tools(directory: Path) -> tuple[Path, Path]:
         "  if ($env:RAGV_MOCK_MODE -ne 'missing-checksum') {\n"
         "    $h=(Get-FileHash -LiteralPath $p -Algorithm SHA256).Hash.ToLowerInvariant()\n"
         "    if ($env:RAGV_MOCK_MODE -eq 'bad-checksum') { $h='0'*64 }\n"
+        "    if ($env:RAGV_MOCK_MODE -eq 'wrong-name') { [IO.File]::WriteAllText($p+'.sha256', $h+'  other.dump'); exit 0 }\n"
         "    if ($env:RAGV_MOCK_MODE -eq 'malformed-checksum') { [IO.File]::WriteAllText($p+'.sha256', $h+'  '+[IO.Path]::GetFileName($p)+[Environment]::NewLine+'junk'); exit 0 }\n"
         "    [IO.File]::WriteAllText($p+'.sha256', $h+'  '+[IO.Path]::GetFileName($p))\n"
         "  }\n"
@@ -86,25 +87,25 @@ def _environment(
 
 
 def _run_update(script: Path, backup: Path, env: dict[str, str], timeout: int = 25) -> subprocess.CompletedProcess[str]:
-    return subprocess.run(
+    return subprocess.run(  # nosec B603,B607 - controlled PowerShell fixture; shell disabled
         [POWERSHELL_EXE, "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", str(script), "-BackupPath", str(backup)],
         env=env,
         text=True,
         capture_output=True,
         timeout=timeout,
         shell=False,
-    )  # nosec B603,B607 - absolute Windows PowerShell path; arguments are isolated fixtures
+    )
 
 
 def _start_update(script: Path, backup: Path, env: dict[str, str]) -> subprocess.Popen[str]:
-    return subprocess.Popen(
+    return subprocess.Popen(  # nosec B603,B607 - controlled PowerShell fixture; shell disabled
         [POWERSHELL_EXE, "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", str(script), "-BackupPath", str(backup)],
         env=env,
         text=True,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         shell=False,
-    )  # nosec B603,B607 - absolute Windows PowerShell path; arguments are isolated fixtures
+    )
 
 
 def _wait_for_marker(process: subprocess.Popen[str], marker: Path) -> None:
@@ -283,6 +284,7 @@ def test_backup_parent_must_be_a_directory_and_fail_before_docker(tmp_path: Path
         ("truncated", "Checksum do backup"),
         ("missing-checksum", "ausente"),
         ("bad-checksum", "Checksum do backup"),
+        ("wrong-name", "Checksum do backup"),
         ("malformed-checksum", "malformado"),
     ],
 )
@@ -408,14 +410,14 @@ def test_abandoned_owner_requires_inspection_and_then_releases_lock(tmp_path: Pa
     holder_env["PATH"] = os.pathsep.join((POWERSHELL_SEARCH_PATH, holder_env.get("PATH", "")))
     holder_env["RAGV_LOCK_NAME"] = lock_name
     holder_env["RAGV_INFO_MARKER"] = str(marker)
-    holder = subprocess.Popen(
+    holder = subprocess.Popen(  # nosec B603,B607 - test-owned mutex holder; shell disabled
         [POWERSHELL_EXE, "-NoProfile", "-File", str(holder_script)],
         env=holder_env,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         text=True,
         shell=False,
-    )  # nosec B603,B607 - absolute PowerShell path and fixture script
+    )
     try:
         _wait_for_marker(holder, marker)
         retry_backup = tmp_path / "after-interruption.dump"
@@ -458,14 +460,14 @@ def test_mutex_creation_failure_blocks_all_docker_calls(tmp_path: Path) -> None:
     env["PATH"] = os.pathsep.join((str(shim_dir), POWERSHELL_SEARCH_PATH, env.get("PATH", "")))
     env["RAGV_LOCK_NAME"] = lock_name
     env["RAGV_INFO_MARKER"] = str(marker)
-    holder = subprocess.Popen(
+    holder = subprocess.Popen(  # nosec B603,B607 - test-owned event holder; shell disabled
         [POWERSHELL_EXE, "-NoProfile", "-File", str(holder_script)],
         env=env,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         text=True,
         shell=False,
-    )  # nosec B603,B607 - absolute PowerShell path and fixture script
+    )
     try:
         _wait_for_marker(holder, marker)
         backup = tmp_path / "must-not-run.dump"
