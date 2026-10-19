@@ -42,6 +42,13 @@ fields, repeated tokens, quoted/escaped secrets, partial masking, negative
 controls and preservation of public diagnostic identifiers. Only synthetic
 credentials are used. Hypothesis properties do not prove universal scrubbing.
 
+The worker boundary regression also checks the actual rendered runtime log and
+its error-detail argument to queue failure handling with unconfigured synthetic
+callback/password/rpy values. Diagnostic IDs/status remain, while job identity,
+worker ownership, attempts and retry classification are unchanged. This is an
+in-process boundary test with a fake queue connection, not a PostgreSQL durability
+or restore claim.
+
 The helper is not a general PII scrubber or a detector for arbitrary unlabelled
 secrets. Malformed/truncated quote grammars, adversarial large-input performance
 and all end-to-end logging consumers remain outside this bounded evidence.
