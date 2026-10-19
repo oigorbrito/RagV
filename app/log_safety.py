@@ -37,16 +37,22 @@ _AUTHORIZATION_RE = re.compile(
 )
 _STRUCTURED_SECRET_RE = re.compile(
     r"""(?ix)
-    (?P<prefix>["']?(?:api[_-]?key|secret[_-]?key|private[_-]?key|access[_-]?key|app[_-]?key|auth[_-]?key|signing[_-]?key|encryption[_-]?key|client[_-]?secret|app[_-]?secret|auth[_-]?token|refresh[_-]?token|bearer[_-]?token|session[_-]?token|id[_-]?token|user[_-]?token|api[_-]?token|access[_-]?token|bearer|token|password|secret)["']?\s*[=:]\s*)
-    (?P<quote>["']?)
-    (?P<secret>[^"'\s,;&}\]]+)
-    (?P=quote)
+    (?P<prefix>["']?(?:api[_-]?key|secret[_-]?key|private[_-]?key|access[_-]?key|app[_-]?key|auth[_-]?key|signing[_-]?key|encryption[_-]?key|client[_-]?secret|app[_-]?secret|auth[_-]?token|refresh[_-]?token|bearer[_-]?token|session[_-]?token|id[_-]?token|user[_-]?token|api[_-]?token|access[_-]?token|webhook[_-]?(?:token|key|secret)|callback[_-]?(?:token|key|secret)|bearer|token|password|passwd|pwd|credential|credentials|secret)["']?\s*[=:]\s*)
+    (?P<quote>["'])?
+    (?P<secret>
+        (?(quote)
+            (?: \\. | (?! (?P=quote) ) [^\\\r\n] )+
+            |
+            (?: \[REDACTED\] [^"'\s,;&}\]]* | [^"'\s,;&}\]]+ )
+        )
+    )
+    (?(quote)(?P=quote))
     """
 )
 # Redact application/provider API keys even when not configured in env or when
 # appearing without authorization headers or query parameter names.
 _API_KEY_TOKEN_RE = re.compile(
-    r"\b(?:sk_(?:live|test)_[a-zA-Z0-9_-]+|sk-[a-zA-Z0-9_-]{12,}|eyJ[a-zA-Z0-9_-]+\.eyJ[a-zA-Z0-9_-]+\.[a-zA-Z0-9_-]+)\b"
+    r"\b(?:sk_(?:live|test)_[a-zA-Z0-9_-]+|sk-[a-zA-Z0-9_-]{12,}|rpy_[a-zA-Z0-9_-]{12,}|eyJ[a-zA-Z0-9_-]+\.eyJ[a-zA-Z0-9_-]+\.[a-zA-Z0-9_-]+)\b"
 )
 
 
@@ -92,8 +98,8 @@ def sanitize_error_message(value: object, *, max_chars: int = MAX_ERROR_MESSAGE_
     )
     text = _STRUCTURED_SECRET_RE.sub(
         lambda match: (
-            f"{match.group('prefix')}{match.group('quote')}"
-            f"{REDACTED}{match.group('quote')}"
+            f"{match.group('prefix')}{match.group('quote') or ''}"
+            f"{REDACTED}{match.group('quote') or ''}"
         ),
         text,
     )
