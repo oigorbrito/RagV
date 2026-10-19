@@ -8,7 +8,8 @@ import pytest
 
 
 ROOT = Path(__file__).resolve().parents[1]
-POWERSHELL_SEARCH_PATH = os.path.join(os.environ.get("WINDIR", r"C:\Windows"), "System32", "WindowsPowerShell", "v1.0")
+POWERSHELL_EXE = str(Path(os.environ.get("WINDIR", r"C:\Windows")) / r"System32\WindowsPowerShell\v1.0\powershell.exe")
+POWERSHELL_SEARCH_PATH = str(Path(POWERSHELL_EXE).parent)
 
 
 def _check(condition: bool, message: str) -> None:
@@ -86,24 +87,24 @@ def _environment(
 
 def _run_update(script: Path, backup: Path, env: dict[str, str], timeout: int = 25) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
-        ["powershell.exe", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", str(script), "-BackupPath", str(backup)],
+        [POWERSHELL_EXE, "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", str(script), "-BackupPath", str(backup)],
         env=env,
         text=True,
         capture_output=True,
         timeout=timeout,
         shell=False,
-    )  # nosec B603 - fixed executable; script and file arguments are isolated test fixtures
+    )  # nosec B603,B607 - absolute Windows PowerShell path; arguments are isolated fixtures
 
 
 def _start_update(script: Path, backup: Path, env: dict[str, str]) -> subprocess.Popen[str]:
     return subprocess.Popen(
-        ["powershell.exe", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", str(script), "-BackupPath", str(backup)],
+        [POWERSHELL_EXE, "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", str(script), "-BackupPath", str(backup)],
         env=env,
         text=True,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         shell=False,
-    )  # nosec B603 - fixed executable; script and file arguments are isolated test fixtures
+    )  # nosec B603,B607 - absolute Windows PowerShell path; arguments are isolated fixtures
 
 
 def _wait_for_marker(process: subprocess.Popen[str], marker: Path) -> None:
@@ -225,7 +226,7 @@ def test_valid_backup_is_verified_before_build_and_no_secret_is_logged(tmp_path:
     backup = tmp_path / "valid [backup].dump"
     log = tmp_path / "calls.log"
     env = _environment(shim_dir, mock_script, log, backup, mode="stderr-success")
-    env["RAGV_SECRET_CANARY"] = "synthetic-secret-never-log"
+    env["RAGV_LOG_SENTINEL"] = "synthetic-log-marker-243"
     result = _run_update(ROOT / "scripts/update-ragv-desktop.ps1", backup, env)
 
     _check(result.returncode == 0, f"Valid archive/checksum should proceed: {result.stdout} {result.stderr}")
@@ -235,7 +236,7 @@ def test_valid_backup_is_verified_before_build_and_no_secret_is_logged(tmp_path:
     positions = [next((i for i, line in enumerate(calls) if line.lower().startswith(prefix)), -1) for prefix in expected]
     _check(all(position >= 0 for position in positions), f"Expected operations absent: {calls}")
     _check(positions == sorted(positions), f"Backup verification/apply order incorrect: {calls}")
-    _check("synthetic-secret-never-log" not in "\n".join(calls), "Secret canary must not appear in command logs")
+    _check("synthetic-log-marker-243" not in "\n".join(calls), "Synthetic log sentinel must not appear in command logs")
     _check("synthetic diagnostic" not in result.stderr, "Raw Docker stderr must not be emitted to logs")
     _check(not any(line.lower().startswith("compose down") for line in calls), "Updater must not remove Compose volumes")
 
@@ -408,13 +409,13 @@ def test_abandoned_owner_requires_inspection_and_then_releases_lock(tmp_path: Pa
     holder_env["RAGV_LOCK_NAME"] = lock_name
     holder_env["RAGV_INFO_MARKER"] = str(marker)
     holder = subprocess.Popen(
-        ["powershell.exe", "-NoProfile", "-File", str(holder_script)],
+        [POWERSHELL_EXE, "-NoProfile", "-File", str(holder_script)],
         env=holder_env,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         text=True,
         shell=False,
-    )  # nosec B603 - fixed PowerShell executable and fixture script
+    )  # nosec B603,B607 - absolute PowerShell path and fixture script
     try:
         _wait_for_marker(holder, marker)
         retry_backup = tmp_path / "after-interruption.dump"
@@ -458,13 +459,13 @@ def test_mutex_creation_failure_blocks_all_docker_calls(tmp_path: Path) -> None:
     env["RAGV_LOCK_NAME"] = lock_name
     env["RAGV_INFO_MARKER"] = str(marker)
     holder = subprocess.Popen(
-        ["powershell.exe", "-NoProfile", "-File", str(holder_script)],
+        [POWERSHELL_EXE, "-NoProfile", "-File", str(holder_script)],
         env=env,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         text=True,
         shell=False,
-    )  # nosec B603 - fixed PowerShell executable and fixture script
+    )  # nosec B603,B607 - absolute PowerShell path and fixture script
     try:
         _wait_for_marker(holder, marker)
         backup = tmp_path / "must-not-run.dump"
@@ -478,4 +479,5 @@ def test_mutex_creation_failure_blocks_all_docker_calls(tmp_path: Path) -> None:
         _check(not log.exists(), "Mutex creation/acquisition failure must occur before Docker")
     finally:
         if holder.poll() is None:
-            subprocess.run(["taskkill.exe", "/PID", str(holder.pid), "/T", "/F"], capture_output=True, text=True, timeout=15, shell=False)  # nosec B603 - PID belongs to test-created process tree
+            holder.terminate()
+            holder.communicate(timeout=10)
