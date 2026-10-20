@@ -11,6 +11,8 @@ function Import-Function([string]$Path, [string]$Name) {
     Assert-Contract ($null -ne $definition) 'Function not found'
     return $definition.Extent.Text
 }
+# Also runnable under CI PowerShell on Linux; never resolve the real user profile.
+$env:LOCALAPPDATA = $Scratch
 . (Join-Path $Root 'packaging/windows/homologacao-common.ps1')
 $script:HmlRoot = Join-Path $Scratch 'profile with spaces'
 $script:HmlEnv = Join-Path $script:HmlRoot '.env'
