@@ -140,8 +140,9 @@ async def test_worker_marks_explicit_permanent_task_error(monkeypatch) -> None:
         ("", ()),
         (
             " callback_key='SYNTHETIC_CALLBACK_252 with spaces'"
-            " pwd=[REDACTED]SYNTHETIC_TAIL_252 rpy_SYNTHETIC_TOKEN_252",
-            ("SYNTHETIC_CALLBACK_252", "SYNTHETIC_TAIL_252", "rpy_SYNTHETIC_TOKEN_252"),
+            " pwd=[REDACTED]SYNTHETIC_TAIL_252 rpy_SYNTHETIC_TOKEN_252"
+            " passcode=SYNTHETIC_PASSCODE_273",
+            ("SYNTHETIC_CALLBACK_252", "SYNTHETIC_TAIL_252", "rpy_SYNTHETIC_TOKEN_252", "SYNTHETIC_PASSCODE_273"),
         ),
     ],
 )

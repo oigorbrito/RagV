@@ -3,8 +3,10 @@
 ## Contract and scope
 
 `sanitize_error_message` must remove configured/provider credentials and recognized
-credential fields while retaining non-sensitive diagnostic context. This slice
-combines the connection credential names from #472, webhook/callback fields from
+credential fields (including the explicit `passcode` alias) while retaining
+non-sensitive diagnostic context. Bare `key` and `pass` labels are intentionally
+not recognized because they are ambiguous. This slice combines the connection
+credential names from #472, webhook/callback fields from
 #481, and standalone `rpy_` token recognition from #484. It does not change
 logging architecture, authentication, provider requests, DataJud capabilities,
 queue behavior, persistence, or the configured-secret environment contract.
