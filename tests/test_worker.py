@@ -134,10 +134,22 @@ async def test_worker_marks_explicit_permanent_task_error(monkeypatch) -> None:
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("extra_detail", "extra_secrets"),
+    [
+        ("", ()),
+        (
+            " callback_key='SYNTHETIC_CALLBACK_252 with spaces'"
+            " pwd=[REDACTED]SYNTHETIC_TAIL_252 rpy_SYNTHETIC_TOKEN_252",
+            ("SYNTHETIC_CALLBACK_252", "SYNTHETIC_TAIL_252", "rpy_SYNTHETIC_TOKEN_252"),
+        ),
+    ],
+)
 async def test_worker_redacts_secret_from_error_log_and_runtime_log(
-    monkeypatch, caplog
+    monkeypatch, caplog, extra_detail: str, extra_secrets: tuple[str, ...]
 ) -> None:
     failed: list[str] = []
+    failure_calls: list[dict] = []
     secret = "sk-provider-secret-value"
     monkeypatch.setenv("ANTHROPIC_API_KEY", secret)
 
@@ -145,10 +157,15 @@ async def test_worker_redacts_secret_from_error_log_and_runtime_log(
         raise RuntimeError(
             f"provider failed with {secret} at "
             "postgresql://rpy_worker:db-password@postgres:5432/rpy"
+            f"{extra_detail} request_id=diagnostic-252 status=502"
         )
 
     async def fake_fail(conn, job_id, worker_id, *, attempts, error, permanent=False):
         failed.append(error)
+        failure_calls.append({
+            "job_id": job_id, "worker_id": worker_id,
+            "attempts": attempts, "permanent": permanent,
+        })
         return True
 
     monkeypatch.setattr(worker_module, "resolve_task", lambda name: leaking_handler)
@@ -174,6 +191,17 @@ async def test_worker_redacts_secret_from_error_log_and_runtime_log(
     assert "db-password" not in rendered_logs
     assert "[REDACTED]" in rendered_logs
     assert all(record.exc_info is None for record in caplog.records)
+    for rendered in (failed[0], rendered_logs):
+        for synthetic_secret in extra_secrets:
+            if synthetic_secret in rendered:
+                raise AssertionError("Worker output retained a synthetic credential")
+        if "request_id=diagnostic-252" not in rendered or "status=502" not in rendered:
+            raise AssertionError("Worker output lost public diagnostic context")
+    if failure_calls != [{
+        "job_id": row["id"], "worker_id": worker.worker_id,
+        "attempts": row["attempts"], "permanent": False,
+    }]:
+        raise AssertionError("Redaction changed queue-failure identity or retry classification")
 
 
 class _Trace:
