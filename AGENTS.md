@@ -1,22 +1,22 @@
-# Rpy agent operating contract
+# RagV agent operating contract
 
-This repository is being assembled rapidly from verified open-source building blocks. The goal is to maximize reuse of expensive infrastructure while preventing unnecessary product identity, dependencies, abstractions, and behavior from entering Rpy.
+This repository is being assembled rapidly from verified open-source building blocks. The goal is to maximize reuse of expensive infrastructure while preventing unnecessary product identity, dependencies, abstractions, and behavior from entering RagV.
 
 ## Engineering decision model
 
 Agents must distinguish **invariants**, **hypotheses**, and **evidence**.
 
 - An invariant is a property whose violation can corrupt data, leak data, duplicate side effects, break recovery, or violate an explicit product contract. Encode stable, machine-checkable invariants in tests, database constraints/triggers, or the appropriate cheap guardrail. `scripts/project_harness.py` is the project-level entrypoint; `scripts/migration_harness.py` and `scripts/release_harness.py` remain specialized guardrails.
-- A hypothesis is an engineering belief not yet demonstrated in Rpy. Do not turn a hypothesis into a permanent harness rule merely because it is conventional wisdom.
+- A hypothesis is an engineering belief not yet demonstrated in RagV. Do not turn a hypothesis into a permanent harness rule merely because it is conventional wisdom.
 - Evidence is a reproducible observation: a test, CI run, restore drill, benchmark, production metric, incident, or relevant empirical study. Record enough context to reproduce or challenge it.
 
-Prefer repository-local evidence over generic claims. External studies guide risk prioritization and experimental design; they do not prove that a particular threshold or architecture is optimal for Rpy. When evidence is weak, say so and choose a reversible change.
+Prefer repository-local evidence over generic claims. External studies guide risk prioritization and experimental design; they do not prove that a particular threshold or architecture is optimal for RagV. When evidence is weak, say so and choose a reversible change.
 
 The harness is a guardrail, not a second test suite. It should cheaply reject architectural drift and high-consequence invariant violations. Behavioral correctness belongs primarily in unit/integration tests; operational claims belong in drills/metrics.
 
 ## Source-of-truth product constraints
 
-Rpy is a Python/FastAPI service for judicial-process summarization using PostgreSQL and pgvector. PostgreSQL is also the job queue. The queue must claim work with `FOR UPDATE SKIP LOCKED`. The main runtime services are API, workers, and exactly one scheduler/reclaimer process.
+RagV is a Python/FastAPI service for judicial-process summarization using PostgreSQL and pgvector. PostgreSQL is also the job queue. The queue must claim work with `FOR UPDATE SKIP LOCKED`. The main runtime services are API, workers, and exactly one scheduler/reclaimer process.
 
 Do not introduce Redis, Celery, RabbitMQ, BullMQ, Pinecone, LangChain, or LlamaIndex as core infrastructure unless the project owner explicitly changes that decision.
 
@@ -46,10 +46,10 @@ Before transplanting code from another repository:
 3. List transitive dependencies introduced by those files.
 4. Classify each donor element as `COPY`, `ADAPT`, `REFERENCE_ONLY`, or `DROP`.
 5. Prefer the smallest coherent slice that retains tested behavior.
-6. Rename donor-domain concepts to Rpy concepts while integrating, not in a later cleanup pass.
-7. Remove donor UI, dashboards, marketing, telemetry, deployment assumptions, unrelated APIs, demo tasks, sample data, and provider-specific abstractions unless Rpy requires them.
+6. Rename donor-domain concepts to RagV concepts while integrating, not in a later cleanup pass.
+7. Remove donor UI, dashboards, marketing, telemetry, deployment assumptions, unrelated APIs, demo tasks, sample data, and provider-specific abstractions unless RagV requires them.
 8. Preserve attribution/license files when legally required. Do not remove notices that must remain with copied code.
-9. Add or update tests that prove the transplanted behavior in Rpy.
+9. Add or update tests that prove the transplanted behavior in RagV.
 10. Run the project harness before considering the transplant complete; use the migration harness directly when diagnosing architectural/migration violations.
 
 ## Donor allowlist
@@ -69,7 +69,7 @@ Current approved donors and intended scope:
 
 ## Explicit denylist for migrations
 
-Reject or remove donor code that introduces any of the following without an explicit Rpy requirement:
+Reject or remove donor code that introduces any of the following without an explicit RagV requirement:
 
 - donor product names in runtime-facing code;
 - donor logos, screenshots, dashboards, marketing copy, demo data;
@@ -84,7 +84,7 @@ Reject or remove donor code that introduces any of the following without an expl
 - dynamic SQL identifiers/operators originating directly from untrusted request values;
 - sample tasks, fake providers, mock production paths.
 
-## Required Rpy invariants
+## Required RagV invariants
 
 ### Queue
 
@@ -147,7 +147,7 @@ Reject or remove donor code that introduces any of the following without an expl
 
 Use empirical literature as a calibration layer:
 
-- Code review research supports treating review as a quality-control activity, but the literature uses heterogeneous datasets and hundreds of metrics; do not invent universal PR-size or review-time thresholds. Optimize for cohesive, independently testable changes and measure Rpy's own review/rework outcomes.
+- Code review research supports treating review as a quality-control activity, but the literature uses heterogeneous datasets and hundreds of metrics; do not invent universal PR-size or review-time thresholds. Optimize for cohesive, independently testable changes and measure RagV's own review/rework outcomes.
 - Database-evolution research consistently treats schema evolution as a data-preservation/compatibility problem. Prefer incremental compatible migrations and verify them against the real PostgreSQL engine.
 - SRE practice defines SLOs in terms of measured SLIs and error budgets. Do not create reliability percentages from intuition. Document measurement points, caveats, and the evidence behind thresholds; revise them as observations accumulate.
 - Automation/bots can change review throughput and communication patterns. Automated gates must therefore explain actionable violations and avoid noisy style policing that has no demonstrated risk reduction.
@@ -181,7 +181,7 @@ Evaluation methodology references:
 - Harbor eval execution/results: https://www.harborframework.com/docs/run-jobs/run-evals
 - Google SRE SLO guidance: https://sre.google/workbook/implementing-slos/
 
-These references support reproducible execution, isolated environments, identifiable runs, structured results, and measured reliability objectives. They do not supply Rpy-specific acceptance thresholds. Rpy thresholds must come from an explicit product/SLO contract or from locally measured evidence with the measurement method documented.
+These references support reproducible execution, isolated environments, identifiable runs, structured results, and measured reliability objectives. They do not supply RagV-specific acceptance thresholds. RagV thresholds must come from an explicit product/SLO contract or from locally measured evidence with the measurement method documented.
 
 ## Definition of done for a transplant or architectural change
 
@@ -195,7 +195,7 @@ A change is complete only when:
 - migrations are compatible/recoverable according to the change protocol;
 - durable invariants and operational consequences are documented;
 - the actual CI head is green;
-- the code fits Rpy's current module boundaries rather than preserving donor folder structure for convenience.
+- the code fits RagV's current module boundaries rather than preserving donor folder structure for convenience.
 
 ## Preservação de contratos comprovados
 
@@ -207,6 +207,6 @@ A homologação não pode modificar bancos, tenants, volumes ou configuração d
 
 ## Working style for coding agents
 
-Prefer working behavior over speculative architecture. Make small vertical slices executable early. When an external implementation is already correct and generic, adapt it rather than rewriting it for stylistic reasons. When donor abstractions exceed Rpy's needs, delete them aggressively.
+Prefer working behavior over speculative architecture. Make small vertical slices executable early. When an external implementation is already correct and generic, adapt it rather than rewriting it for stylistic reasons. When donor abstractions exceed RagV's needs, delete them aggressively.
 
 Do not optimize for number of commits, lines changed, test count, or coverage percentage in isolation. Optimize for demonstrated risk reduction, reversibility, reproducibility, privacy, and recovery. When a claim cannot yet be demonstrated, leave it as a documented hypothesis with a measurement plan rather than encoding false certainty in the harness.

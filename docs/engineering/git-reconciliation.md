@@ -1,10 +1,10 @@
-# Reconciliação do histórico Git — baseline DataJud
+# Reconciliação do histórico Git — baseline DataJud (snapshot histórico)
 
-Data da inspeção: 2026-10-18 (reconciliação atualizada do Bloco 222)
+Data da inspeção: 2026-10-18 (reconciliação atualizada do Bloco 222). Este documento preserva o retrato daquela data; não representa o estado atual das branches/PRs. Para uma decisão de integração, faça nova reconciliação contra a main remota atual sem reescrever este snapshot.
 
-## Referências atuais
+## Referências na data da inspeção
 
-Após `git fetch origin --prune`:
+Após `git fetch origin --prune` naquele momento:
 
 ```text
 origin/main: f3869ba38959da72b679bf8e56cb30fcb1fda4ee

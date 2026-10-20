@@ -5,14 +5,13 @@
 This document tracks work after the published `v0.1.1` release. It is intentionally separate from
 `docs/release/v0.1.1.md`, which records the release-time scope/evidence for that immutable version.
 
-## Current repository-qualified head
+## Previously recorded repository qualification
 
-Latest observed `main` at this update:
+The qualification below is a historical result for commit `54835f878e9b7aec7a3a32e2aef896f6e9785a90`, not a current `main` status. On 2026-10-20 this document was reviewed against `origin/main` at `c301acd1e10707791615cbf15493a6f6c707816b`; CI/security status for that newer SHA was not checked here. Preserve the original run records, but do not infer that they qualify later commits:
 
-- commit: `54835f878e9b7aec7a3a32e2aef896f6e9785a90`;
-- CI run `36568990457`: success;
-- vulnerability-scan run `36568990456`: success;
-- CodeQL push run `36568990037`: success.
+- CI run `36568990457`: success on the historical candidate;
+- vulnerability-scan run `36568990456`: success on the historical candidate;
+- CodeQL push run `36568990037`: success on the historical candidate.
 
 Any later code or deployment-contract change creates a new candidate and must repeat exact-head
 qualification.
@@ -30,11 +29,11 @@ qualification.
 | Release smoke | provider-free offline release smoke | ready |
 | Production preflight | deploy environment + Compose validators | ready |
 | Judit transport | real request/polling/lawsuit response evidence | accepted |
-| Judit callback ingress | public HTTPS transport accepted; persistent-staging ingress hardened against stale container addressing | hardening pending merge |
+| Judit callback ingress | Repository ingress configuration resolves the API dynamically and has a validator/regression tests (`scripts/validate_staging_ingress.py`, `tests/test_staging_ingress.py`) | repo-side hardening present at the reviewed main SHA; live persistent-staging acceptance must be reverified separately |
 | Internal finalization | replay + PostgreSQL E2E + offline Judit-to-summary smoke | ready |
 | Production callback config | `JUDIT_CALLBACK_URL` required/validated and injected into workers | ready |
 | Persistent staging gate | `.github/workflows/staging-readiness.yml` + staging contract | ready |
-| Current immutable image | `ghcr.io/oigorbrito/rpy@sha256:5945b301edde901814579190440f68cd1559bd03defb647fa723e6ff7d2b6ac1` | selected for staging acceptance |
+| Previously selected immutable image | `ghcr.io/oigorbrito/rpy@sha256:5945b301edde901814579190440f68cd1559bd03defb647fa723e6ff7d2b6ac1` | historical candidate recorded for staging acceptance; current deployment/selection not verified |
 | Persistent staging host | local persistent Docker/Compose target with stable HTTPS Funnel ingress and secrets outside Git | provisioned |
 
 “Ready” means the repository has deterministic evidence or a controlled operational procedure.
