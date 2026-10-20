@@ -3,12 +3,30 @@ from __future__ import annotations
 from uuid import uuid4
 
 from fastapi.testclient import TestClient
+import pytest
 
 from app.api import app
 from app.datajud_client import datajud_activation_status
 from app.datajud_jobs import metadata_response
 
 CNJ = "0000000-00.2024.8.26.0100"
+
+
+@pytest.mark.parametrize(("mode", "bind", "expected"), [
+    ("true", "127.0.0.1", "homologation"),
+    ("false", "127.0.0.1", "standalone"),
+    ("true", "0.0.0.0", "standalone"),
+])
+def test_capabilities_identifies_environment_without_credentials(monkeypatch, mode, bind, expected):
+    monkeypatch.setenv("RPY_HOMOLOGATION_MODE", mode)
+    monkeypatch.setenv("RPY_HOMOLOGATION_BIND_ADDRESS", bind)
+    monkeypatch.setenv("DATAJUD_ENABLED", "false")
+    monkeypatch.setenv("DATAJUD_API_KEY", "synthetic-datajud-secret-must-not-escape")
+    response = TestClient(app).get("/capabilities")
+    assert response.status_code == 200
+    assert response.json()["environment"] == expected
+    assert response.json()["sources"]["datajud"]["enabled"] is False
+    assert "synthetic-datajud-secret-must-not-escape" not in response.text
 
 
 def test_metadata_response_serializes_only_modeled_metadata() -> None:

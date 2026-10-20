@@ -46,10 +46,17 @@ class DesktopApi:
             "RPY_POWERSHELL", r"C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe"
         )
         try:
-            subprocess.Popen(
+            # The webview bridge runs off the UI thread. Return only after the
+            # dialog closes so capabilities reflect the completed configuration.
+            result = subprocess.run(
                 [powershell, "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", script],
                 creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                check=False,
             )
+            if result.returncode != 0:
+                return {"ok": False, "message": "A configuração DataJud não foi concluída."}
         except (OSError, ValueError):
             return {"ok": False, "message": "Não foi possível abrir o configurador DataJud."}
         return {"ok": True}

@@ -60,6 +60,7 @@ const form = document.querySelector('#search-form'),
   datajudTooltip = document.querySelector('#datajud-tooltip'),
   datajudStatusHint = document.querySelector('#datajud-status-hint'),
   datajudConfigureButton = document.querySelector('#datajud-configure'),
+  runtimeEnvironment = document.querySelector('#runtime-environment'),
   apiConnectivity = document.querySelector('#api-connectivity'),
   apiConnectivityLabel = document.querySelector('#api-connectivity-label');
 
@@ -197,30 +198,39 @@ async function verifyAuthentication(token) {
 
 async function openDataJudConfigurator() {
   if (!window.pywebview || !window.pywebview.api || !window.pywebview.api.open_datajud_configurator) {
-    if (datajudStatusHint) datajudStatusHint.textContent = 'Abra o configurador DataJud pelo atalho da homologação.';
+    if (datajudStatusHint) datajudStatusHint.textContent = 'Este backend não possui configurador integrado. Configure apenas o ambiente indicado acima; a homologação usa um perfil independente.';
     return;
   }
-  const result = await window.pywebview.api.open_datajud_configurator();
-  if (!result || !result.ok) {
-    if (datajudStatusHint) datajudStatusHint.textContent = result?.message || 'Não foi possível abrir o configurador DataJud.';
-    return;
+  if (datajudConfigureButton) datajudConfigureButton.disabled = true;
+  if (datajudStatusHint) datajudStatusHint.textContent = 'Conclua a autorização no configurador; aguardando o encerramento.';
+  try {
+    const result = await window.pywebview.api.open_datajud_configurator();
+    if (!result || !result.ok) {
+      if (datajudStatusHint) datajudStatusHint.textContent = result?.message || 'Não foi possível concluir a configuração DataJud.';
+      return;
+    }
+    await fetchCapabilities();
+  } catch {
+    if (datajudStatusHint) datajudStatusHint.textContent = 'Não foi possível concluir a configuração DataJud. Verifique o ambiente ativo.';
+  } finally {
+    if (datajudConfigureButton) datajudConfigureButton.disabled = false;
   }
-  if (datajudStatusHint) datajudStatusHint.textContent = 'Conclua a autorização no configurador; depois atualizaremos o estado.';
-  window.setTimeout(fetchCapabilities, 3000);
 }
 
 async function fetchCapabilities() {
   try {
     const response = await fetch(apiUrl('/capabilities'));
-    if (!response.ok) {
-      if (apiConnectivity) apiConnectivity.classList.add('offline');
-      if (apiConnectivityLabel) apiConnectivityLabel.textContent = 'API RagV indisponível';
-      return;
-    }
+    if (!response.ok) throw new Error('CAPABILITIES_UNAVAILABLE');
     if (apiConnectivity) apiConnectivity.classList.remove('offline');
     if (apiConnectivityLabel) apiConnectivityLabel.textContent = 'API RagV conectada';
     const data = await response.json();
     availableCapabilities = data;
+    if (runtimeEnvironment) {
+      const label = data.environment === 'homologation' ? 'Homologação' :
+        data.environment === 'standalone' ? 'Instância independente' : 'não identificado';
+      const origin = new URL(API_BASE || window.location.origin, window.location.origin).origin;
+      runtimeEnvironment.textContent = `Ambiente: ${label} — API ${origin}`;
+    }
     const datajud = data.sources && data.sources.datajud;
     if (datajud && sourceDataJudRadio) {
       if (datajud.enabled) {
@@ -241,6 +251,8 @@ async function fetchCapabilities() {
     }
   } catch {
     if (sourceDataJudRadio) sourceDataJudRadio.disabled = true;
+    if (runtimeEnvironment) runtimeEnvironment.textContent = 'Ambiente não confirmado: API indisponível.';
+    if (datajudStatusHint) datajudStatusHint.textContent = 'Estado do DataJud não confirmado: API indisponível.';
     if (apiConnectivity) apiConnectivity.classList.add('offline');
     if (apiConnectivityLabel) apiConnectivityLabel.textContent = 'API RagV indisponível';
   }

@@ -80,15 +80,26 @@ class DesktopLauncherTests(unittest.TestCase):
             self.assertEqual(desktop.main(), 0)
         fake_webview.start.assert_called_once()
 
-    @patch("subprocess.Popen")
-    def test_datajud_configurator_uses_packaged_script(self, popen):
+    @patch("subprocess.run")
+    def test_datajud_configurator_waits_for_packaged_script(self, run):
+        run.return_value.returncode = 0
         with patch.dict(
             "os.environ",
             {"RPY_DESKTOP_CONFIGURATOR": "C:\\RagV\\configurar-datajud.ps1"},
         ), patch.object(desktop.os.path, "isfile", return_value=True):
             result = desktop.DesktopApi().open_datajud_configurator()
         self.assertEqual(result, {"ok": True})
-        popen.assert_called_once()
+        run.assert_called_once()
+        self.assertEqual(run.call_args.kwargs["stdout"], desktop.subprocess.DEVNULL)
+        self.assertEqual(run.call_args.kwargs["stderr"], desktop.subprocess.DEVNULL)
+
+    @patch("subprocess.run")
+    def test_datajud_configurator_reports_failure_without_child_output(self, run):
+        run.return_value.returncode = 1
+        with patch.dict("os.environ", {"RPY_DESKTOP_CONFIGURATOR": "C:\\RagV\\configurar-datajud.ps1"}), patch.object(desktop.os.path, "isfile", return_value=True):
+            self.assertEqual(desktop.DesktopApi().open_datajud_configurator(), {
+                "ok": False, "message": "A configuração DataJud não foi concluída.",
+            })
 
     def test_managed_token_script_does_not_expose_token_in_url(self):
         with patch.dict("os.environ", {"RPY_DESKTOP_TOKEN": "managed-token"}):

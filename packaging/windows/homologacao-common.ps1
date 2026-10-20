@@ -98,6 +98,19 @@ function Get-HmlSettings {
     }
     $tokenFile=Join-Path $script:HmlRoot 'access-token.txt';if((Test-Path $tokenFile)-and((Get-Content $tokenFile -Raw).Trim()-cne$script:HmlDefaultToken)){Set-Content $tokenFile $script:HmlDefaultToken -Encoding ASCII;Set-HmlPrivatePath $tokenFile};return $settings
 }
+function Assert-HmlDataJudState([hashtable]$Settings) {
+    if (([string]$Settings.DATAJUD_ENABLED).Trim() -notin @('true','1','yes','on')) { return }
+    if (([string]$Settings.DATAJUD_AUTHORIZED_USE).Trim() -notin @('true','1','yes','on') -or [string]::IsNullOrWhiteSpace($Settings.DATAJUD_API_KEY)) {
+        throw 'Ativação DataJud pendente de autorização ou chave no perfil deste ambiente. Configuração preservada.'
+    }
+    try {
+        $response = Invoke-WebRequest -Uri "http://127.0.0.1:$($Settings.RPY_API_PORT)/capabilities" -UseBasicParsing -TimeoutSec 3
+        $capabilities = $response.Content | ConvertFrom-Json
+        if ($capabilities.sources.datajud.enabled -eq $true) { return }
+    } catch { }
+    throw 'DataJud está habilitado no perfil persistido, mas não foi confirmado pela API deste ambiente. A configuração foi preservada; abertura cancelada.'
+}
+
 function Write-HmlEvent([string]$Stage,[int]$Code){$event=@{at=[DateTime]::UtcNow.ToString('o');stage=$Stage;exit_code=$Code;ps_version=$PSVersionTable.PSVersion.ToString()};Add-Content (Join-Path $script:HmlRoot 'startup.jsonl') ($event|ConvertTo-Json -Compress) -Encoding UTF8}
 function Invoke-HmlDocker([string]$Stage,[string[]]$DockerArgs){$script:HmlStage=$Stage;if($script:HmlStatusLabel){$script:HmlStatusLabel.Text=$Stage;[Windows.Forms.Application]::DoEvents()};$start=New-Object Diagnostics.ProcessStartInfo;$start.FileName=(Get-Command docker.exe).Source;$start.Arguments=(($DockerArgs|ForEach-Object{'"'+$_.Replace('"','\"')+'"'})-join' ');$start.UseShellExecute=$false;$start.CreateNoWindow=$true;$start.RedirectStandardOutput=$true;$start.RedirectStandardError=$true;$p=New-Object Diagnostics.Process;$p.StartInfo=$start;$p.Start()|Out-Null;$stdout=$p.StandardOutput.ReadToEndAsync();$stderr=$p.StandardError.ReadToEndAsync();while(-not$p.WaitForExit(100)){if($script:HmlStatusLabel){[Windows.Forms.Application]::DoEvents()}};$out=$stdout.GetAwaiter().GetResult();$null=$stderr.GetAwaiter().GetResult();$code=$p.ExitCode;$p.Dispose();Write-HmlEvent $Stage $code;if($code-ne 0){throw "A etapa '$Stage' falhou (código $code). Veja startup.jsonl."};return $out}
 function Get-HmlComposeArgs([hashtable]$Settings){return @('compose','--project-name',$Settings.COMPOSE_PROJECT_NAME,'--project-directory',$script:HmlRuntime,'--env-file',$script:HmlEnv,'-f',(Join-Path $script:HmlRuntime 'compose.yaml'),'-f',(Join-Path $script:HmlRuntime 'compose.homologacao.yaml'))}

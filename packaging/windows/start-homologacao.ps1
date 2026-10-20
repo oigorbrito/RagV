@@ -83,6 +83,8 @@ try {
         Start-Sleep -Milliseconds 1000
     }
     if (-not $ready) { Write-HmlEvent $script:HmlStage 1; throw 'API/PostgreSQL não ficaram prontos no prazo. Nenhum tenant foi ignorado.' }
+    $script:HmlStage = 'Verificando configuração DataJud persistida'
+    Assert-HmlDataJudState $settings
     # exec usa a API já saudável e seu ambiente real, não um migrate sem Bearer.
     $tenantReport = Invoke-HmlDocker -Stage 'Preparando e verificando tenant de homologação' -DockerArgs ($compose + @('exec','-T','api','python','scripts/bootstrap_homologation.py'))
     $report = $tenantReport | ConvertFrom-Json
