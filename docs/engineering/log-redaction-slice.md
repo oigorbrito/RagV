@@ -25,8 +25,13 @@ adversarial cases failed despite the existing tests passing.
 The reconciled value matcher handles closed quoted values with spaces,
 punctuation and escaped quotes. Unquoted `[REDACTED]` markers and any visible
 credential tail are consumed as one value; missing quotes render as empty text.
-The URL/Authorization matchers, secret configuration, processing order and final
-output-size bound remain unchanged.
+The Authorization matcher covers the seven explicit schemes documented by its
+unit cases in flat headers and quoted/nested header representations; it preserves
+noncredential diagnostics and does not treat unknown schemes as credentials.
+Quoted Digest directive lists are redacted as one header value; an unquoted Digest
+list is bounded to that header line so later diagnostic lines remain visible. The
+URL matcher, secret configuration, processing order and final output-size bound
+remain unchanged.
 
 ## Reproduction and evidence limits
 
