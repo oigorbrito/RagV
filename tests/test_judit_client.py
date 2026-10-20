@@ -3,6 +3,8 @@ from __future__ import annotations
 import io
 import json
 import urllib.error
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from threading import Thread
 from uuid import uuid4
 
 import pytest
@@ -73,9 +75,9 @@ def test_download_attachment_uses_authenticated_bounded_contract(
     monkeypatch.setenv("JUDIT_API_KEY", "attachment-key")
     monkeypatch.setenv("ATTACHMENT_MAX_BYTES", "16")
     monkeypatch.setattr(
-        judit_client.urllib.request,
-        "urlopen",
-        lambda request, timeout: captured.update(request=request, timeout=timeout)
+        judit_client,
+        "_open_attachment_response",
+        lambda request, *, timeout: captured.update(request=request, timeout=timeout)
         or _Response(
             b"%PDF-synthetic",
             status=200,
@@ -106,8 +108,8 @@ def test_download_attachment_rejects_oversized_body(
     monkeypatch.setenv("JUDIT_API_KEY", "attachment-key")
     monkeypatch.setenv("ATTACHMENT_MAX_BYTES", "4")
     monkeypatch.setattr(
-        judit_client.urllib.request,
-        "urlopen",
+        judit_client,
+        "_open_attachment_response",
         lambda *_args, **_kwargs: _Response(b"12345", status=200),
     )
 
@@ -133,7 +135,7 @@ def test_download_attachment_http_error_discards_body_and_key(
             None,
         )
 
-    monkeypatch.setattr(judit_client.urllib.request, "urlopen", fail)
+    monkeypatch.setattr(judit_client, "_open_attachment_response", fail)
 
     with pytest.raises(judit_client.JuditRequestError) as exc:
         judit_client._download_attachment_sync(
@@ -146,6 +148,58 @@ def test_download_attachment_http_error_discards_body_and_key(
     assert "super-secret-attachment-key" not in str(exc.value)
     assert "sensitive provider body" not in str(exc.value)
     assert exc.value.retry_safe is True
+
+
+def test_download_attachment_does_not_forward_api_key_across_redirects(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    redirected_requests: list[dict[str, str | None]] = []
+
+    class RedirectHandler(BaseHTTPRequestHandler):
+        def do_GET(self) -> None:
+            self.send_response(302)
+            self.send_header(
+                "Location",
+                f"http://127.0.0.1:{sink.server_port}/capture",
+            )
+            self.end_headers()
+
+        def log_message(self, *_args) -> None:
+            pass
+
+    class CaptureHandler(BaseHTTPRequestHandler):
+        def do_GET(self) -> None:
+            redirected_requests.append({"path": self.path, "api_key": self.headers.get("api-key")})
+            self.send_response(200)
+            self.end_headers()
+            self.wfile.write(b"unexpected")
+
+        def log_message(self, *_args) -> None:
+            pass
+
+    sink = ThreadingHTTPServer(("127.0.0.1", 0), CaptureHandler)
+    redirector = ThreadingHTTPServer(("127.0.0.1", 0), RedirectHandler)
+    threads = [Thread(target=server.serve_forever, daemon=True) for server in (sink, redirector)]
+    for thread in threads:
+        thread.start()
+    monkeypatch.setenv("JUDIT_API_KEY", "synthetic-attachment-secret")
+    monkeypatch.setenv("ATTACHMENT_MAX_BYTES", "128")
+    monkeypatch.setattr(
+        judit_client,
+        "JUDIT_LAWSUITS_URL",
+        f"http://127.0.0.1:{redirector.server_port}",
+    )
+    try:
+        with pytest.raises(judit_client.JuditRequestError, match="HTTP 302"):
+            judit_client._download_attachment_sync("synthetic-process", 1, "synthetic-id")
+        assert redirected_requests == []
+    finally:
+        redirector.shutdown()
+        sink.shutdown()
+        redirector.server_close()
+        sink.server_close()
+        for thread in threads:
+            thread.join(timeout=2)
 
 
 def test_download_attachment_requires_safe_identifiers() -> None:
