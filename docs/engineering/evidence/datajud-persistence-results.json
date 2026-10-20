@@ -4,6 +4,9 @@
   "initial_user_checkout_sha": "cf8e69af7a02bfdf8d685c9128d6926f5425731e",
   "isolated_base_sha": "0d2184f53315ced96953624b58afddfd9ef2d5e8",
   "implementation_sha": "f0a2835b077f1a225cbac504186692ed154c8211",
+  "pr_url": "https://github.com/oigorbrito/RagV/pull/518",
+  "followup_validation_sha": "ab94176eedb13bbac1979fddbf8ca66d9c9ffebc",
+  "followup_validation": "97 targeted, 49 DOM, synthetic Chromium, Ruff, harness and diff-check passed locally at this exact head; PowerShell fixture now also isolates LOCALAPPDATA on Linux CI hosts",
   "scope": "Candidate not deployed; existing installed environment inspected read-only. No real-provider query.",
   "environment": {
     "host": "Windows-11-10.0.26300-SP0",
@@ -122,7 +125,15 @@
     "provider_acceptance": "No specific authorized CNJ supplied; no external process lookup executed",
     "container_lifecycle": "New network-none disposable container start exceeded 20 seconds; installed functional services were not restarted",
     "candidate_install": "No rebuilt/signed installer or installed candidate WebView2 acceptance",
-    "remote_ci": "Not yet inspected for final PR head"
+    "remote_ci": {
+      "observed_head": "ab94176eedb13bbac1979fddbf8ca66d9c9ffebc",
+      "run_id": 39443203801,
+      "check_run_id": 118698189103,
+      "conclusion": "failure",
+      "steps": [],
+      "annotation": "The job was not started because recent account payments have failed or your spending limit needs to be increased. Please check the 'Billing & plans' section in your settings",
+      "scope": "Execution blocked, not a test failure or approval; no billing/protection/check changes made"
+    }
   },
   "earlier_attempts": {
     "postgres-tests.txt": "12 passed/2 failed because first disposable database used SQL_ASCII; recreated separate UTF8 database without changing application/fixtures"

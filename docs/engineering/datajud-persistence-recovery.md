@@ -58,6 +58,8 @@ Para fechar o gate: fornecer um CNJ específico e autorização aplicável, norm
 
 ## Handoff, PR e rollback
 
-Commit funcional acima; PR de revisão na branch `fix/datajud-persistence-main` (URL e SHA final no handoff). CI do head final deve ser observada após publicação; os passes locais não a substituem. Sem merge automático.
+PR draft de revisão: [#518](https://github.com/oigorbrito/RagV/pull/518), branch `fix/datajud-persistence-main`. Após o commit funcional, `ab94176eedb13bbac1979fddbf8ca66d9c9ffebc` isolou também LOCALAPPDATA do teste PowerShell em hosts CI Linux. Nesse head, os 97 direcionados, 49 DOM, Chromium, Ruff, harness e diff-check passaram localmente.
+
+A CI remota desse SHA **falhou sem iniciar o job**: run `39443203801`, check `118698189103`, lista de steps vazia. A anotação do GitHub informa pagamentos recentes falhos ou limite de gastos insuficiente. Isso comprova bloqueio administrativo de execução desse run, não falha dos testes nem aprovação do código. Nenhum billing/check/proteção foi alterado. Commits posteriores apenas de evidência não herdam aprovação desse run; SHA final e estado observado constam no handoff. Sem merge automático.
 
 Aplicar futuramente somente por atualização coordenada aprovada do desktop e runtime/API; não substituir manualmente arquivos da instalação 198 nesta investigação. Reverter o commit funcional remove a espera/identidade/guardrail novos sem tocar no perfil ou banco, mas reintroduz o risco visual anterior. **Não apagar `.env`, regenerar chave, copiar homologação para desenvolvimento, remover volumes ou desativar checks como rollback.**
