@@ -105,15 +105,15 @@ def test_renderer_owns_document_structure_and_source_identity() -> None:
     assert "- Classe: Procedimento Comum" in rendered
     assert "- Tribunal: TJRS" in rendered
     assert "## Partes\n- Maria da Silva" in rendered
-    assert "## Representantes\n- Advogado de teste (representa: Maria da Silva)" in rendered
-    assert "Fase registrada: INICIAL" in rendered
-    assert "Situação registrada: ATIVO" in rendered
-    assert "Data de distribuição registrada: 2026-01-10" in rendered
-    assert "Magistrado de teste" in rendered
-    assert "Vara de teste" in rendered
-    assert "***.***.***-01" not in rendered
-    assert "OAB must not appear" not in rendered
-    assert "representa: Pessoa de fora" not in rendered
+    assert "## Representantes\n- Advogado de teste (representa: Maria da Silva)" in rendered  # nosec B101 - pytest assertion
+    assert "Fase registrada: INICIAL" in rendered  # nosec B101 - pytest assertion
+    assert "Situação registrada: ATIVO" in rendered  # nosec B101 - pytest assertion
+    assert "Data de distribuição registrada: 2026-01-10" in rendered  # nosec B101 - pytest assertion
+    assert "Magistrado de teste" in rendered  # nosec B101 - pytest assertion
+    assert "Vara de teste" in rendered  # nosec B101 - pytest assertion
+    assert "***.***.***-01" not in rendered  # nosec B101 - pytest assertion
+    assert "OAB must not appear" not in rendered  # nosec B101 - pytest assertion
+    assert "representa: Pessoa de fora" not in rendered  # nosec B101 - pytest assertion
     assert "\nSíntese factual.\n" in rendered
     assert "## Classe\nProcedimento Comum" in rendered
     assert "## Assuntos\n- Responsabilidade civil" in rendered
@@ -217,7 +217,7 @@ def test_json_document_uses_same_validated_payload_and_normalized_identity() -> 
 
     document = structured_summary_document(payload, context)
 
-    assert document["schema_version"] == 3
+    assert document["schema_version"] == 3  # nosec B101 - pytest assertion
     assert document["process"] == {
         "cnj": "0000000-00.2026.8.21.0001",
         "class_name": "Procedimento Comum",
@@ -243,8 +243,8 @@ def test_json_document_uses_same_validated_payload_and_normalized_identity() -> 
     }
     assert document["summary"] == payload
     assert "internal" not in json.dumps(document, ensure_ascii=False)
-    assert "must omit" not in json.dumps(document, ensure_ascii=False)
-    assert "12345678901" not in json.dumps(document, ensure_ascii=False)
+    assert "must omit" not in json.dumps(document, ensure_ascii=False)  # nosec B101 - pytest assertion
+    assert "12345678901" not in json.dumps(document, ensure_ascii=False)  # nosec B101 - pytest assertion
 
 
 def test_persisted_document_process_projection_must_match_context() -> None:
@@ -273,8 +273,8 @@ def test_legacy_document_without_representatives_remains_canonical_and_reusable(
     legacy_process.pop("representatives")
     legacy = {**document, "schema_version": 2, "process": legacy_process}
 
-    assert structured_summary_document_is_canonical(legacy) is True
-    assert structured_summary_document_matches_process(legacy, context) is True
+    assert structured_summary_document_is_canonical(legacy) is True  # nosec B101 - pytest assertion
+    assert structured_summary_document_matches_process(legacy, context) is True  # nosec B101 - pytest assertion
     assert structured_summary_document_is_canonical(document) is True
 
 
@@ -283,7 +283,7 @@ def test_new_document_requires_representative_projection_key() -> None:
     process = dict(document["process"])
     process.pop("representatives")
 
-    assert structured_summary_document_is_canonical(
+    assert structured_summary_document_is_canonical(  # nosec B101 - pytest assertion
         {**document, "process": process}
     ) is False
 

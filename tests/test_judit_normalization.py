@@ -91,7 +91,7 @@ def test_public_header_retains_source_phase_status_and_court_unit() -> None:
         }
     )
 
-    assert fields["header"] == {
+    assert fields["header"] == {  # nosec B101 - pytest assertion
         "area": "Cível",
         "justice_description": "Justiça Estadual",
         "phase": "INICIAL",
@@ -112,10 +112,10 @@ def test_public_source_header_bounds_values_and_masks_personal_ids() -> None:
         }
     )
 
-    assert fields["header"]["status"] == "ATIVO CPF [documento removido]"
-    assert fields["header"]["court_unit"] == "Vara CPF [documento removido]"
-    assert "phase" not in fields["header"]
-    assert "12345678901" not in str(fields["header"])
+    assert fields["header"]["status"] == "ATIVO CPF [documento removido]"  # nosec B101 - pytest assertion
+    assert fields["header"]["court_unit"] == "Vara CPF [documento removido]"  # nosec B101 - pytest assertion
+    assert "phase" not in fields["header"]  # nosec B101 - pytest assertion
+    assert "12345678901" not in str(fields["header"])  # nosec B101 - pytest assertion
 
 
 def test_secret_header_does_not_expand_to_status_or_phase() -> None:
@@ -129,8 +129,8 @@ def test_secret_header_does_not_expand_to_status_or_phase() -> None:
         }
     )
 
-    assert fields["header"] == {}
-    assert fields["parties"] == []
+    assert fields["header"] == {}  # nosec B101 - pytest assertion
+    assert fields["parties"] == []  # nosec B101 - pytest assertion
 
 
 def test_normalized_person_type_handles_unhashable_input_types() -> None:

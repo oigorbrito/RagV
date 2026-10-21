@@ -96,12 +96,12 @@ async def test_paginated_request_uses_only_lawsuit_for_rag_context(
         assert "Sentença Proferida" in source
         assert "2026-06-10T09:00:00-03:00" in source
         assert "2026-06-11T09:00:00-03:00" in source
-        assert "PRIVATE_PHASE_SENTINEL" not in source
-        assert "PRIVATE_STATUS_SENTINEL" not in source
-        assert "Magistrado Sintético" not in source
-        assert "Vara Cível Sintética" not in source
-        assert "Advogada Sintética" not in source
-        assert representative_personal_id not in source
+        assert "PRIVATE_PHASE_SENTINEL" not in source  # nosec B101 - pytest assertion
+        assert "PRIVATE_STATUS_SENTINEL" not in source  # nosec B101 - pytest assertion
+        assert "Magistrado Sintético" not in source  # nosec B101 - pytest assertion
+        assert "Vara Cível Sintética" not in source  # nosec B101 - pytest assertion
+        assert "Advogada Sintética" not in source  # nosec B101 - pytest assertion
+        assert representative_personal_id not in source  # nosec B101 - pytest assertion
         assert {
             "scheduled_hearing": {"date": "03/03/2027", "time": "15:00"}
         } in temporal_facts

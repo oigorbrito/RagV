@@ -15,13 +15,13 @@ def test_temporal_facts_separate_movement_date_from_scheduled_hearing() -> None:
 
     facts = _movement_temporal_facts(text)
 
-    assert facts == {
+    assert facts == {  # nosec B101 - pytest assertion
         "scheduled_hearing": {"date": "03/03/2027", "time": "15:00"}
     }
 
 
 def test_negated_or_cancelled_hearing_is_not_annotated_as_scheduled() -> None:
-    assert _movement_temporal_facts(
+    assert _movement_temporal_facts(  # nosec B101 - pytest assertion
         "Audiência não designada para 03/03/2027 às 15:00."
     ) == {}
     assert _movement_temporal_facts(
@@ -32,8 +32,8 @@ def test_negated_or_cancelled_hearing_is_not_annotated_as_scheduled() -> None:
 def test_only_explicit_period_is_extracted_without_calculating_due_date() -> None:
     facts = _movement_temporal_facts("Intimação. Prazo: 15 dias úteis.")
 
-    assert facts == {"explicit_period": {"value": 15, "unit_text": "dias úteis"}}
-    assert _movement_temporal_facts("Intimação em 10/02/2026. Manifestar em 15 dias.") == {}
+    assert facts == {"explicit_period": {"value": 15, "unit_text": "dias úteis"}}  # nosec B101 - pytest assertion
+    assert _movement_temporal_facts("Intimação em 10/02/2026. Manifestar em 15 dias.") == {}  # nosec B101 - pytest assertion
 
 
 def test_temporal_facts_are_sent_with_their_source_movement() -> None:
@@ -59,7 +59,7 @@ def test_temporal_facts_are_sent_with_their_source_movement() -> None:
         }
     )
 
-    assert serialized[0]["occurred_at"] != "03/03/2027"
-    assert provider_steps[0]["source_temporal_facts"] == {
+    assert serialized[0]["occurred_at"] != "03/03/2027"  # nosec B101 - pytest assertion
+    assert provider_steps[0]["source_temporal_facts"] == {  # nosec B101 - pytest assertion
         "scheduled_hearing": {"date": "03/03/2027", "time": "15:00"}
     }

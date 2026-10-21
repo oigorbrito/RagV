@@ -75,9 +75,9 @@ def test_render_only_metadata_is_not_sent_to_provider() -> None:
 
     process, _ = _provider_payload(context)
 
-    assert "representatives" not in process
-    assert process["header"] == {"instance": 1}
-    assert not any(
+    assert "representatives" not in process  # nosec B101 - pytest assertion
+    assert process["header"] == {"instance": 1}  # nosec B101 - pytest assertion
+    assert not any(  # nosec B101 - pytest assertion
         sentinel in repr(process)
         for sentinel in (
             "PRIVATE_PHASE_SENTINEL",
@@ -92,7 +92,7 @@ def test_render_only_metadata_is_not_sent_to_provider() -> None:
 def test_wired_validation_accepts_renderer_only_distribution_date_from_source() -> None:
     context = _context()
     provider_process, _ = _provider_payload(context)
-    assert "distribution_date" not in provider_process["header"]
+    assert "distribution_date" not in provider_process["header"]  # nosec B101 - pytest assertion
 
     result = _validate_provider_summary(
         (
