@@ -7,7 +7,7 @@ def test_iasummary_provider_contract_is_structured_not_markdown() -> None:
     assert "<saida_estruturada>" in prompt
     assert "JSON Schema" in prompt
     assert "Não emita Markdown, HTML, JSX, XML, headings ou chaves adicionais." in prompt
-    assert "A aplicação renderiza deterministicamente título, cabeçalho processual, listas de partes e representantes e headings" in prompt
+    assert "A aplicação renderiza deterministicamente título, cabeçalho processual, listas de partes e representantes e headings" in prompt  # nosec B101 - pytest assertion
     for field in (
         "synthesis",
         "timeline",
@@ -45,7 +45,7 @@ def test_iasummary_identification_is_application_owned() -> None:
     prompt = PROCESS_SUMMARY_SYSTEM_PROMPT
 
     assert "a aplicação os insere de modo determinístico no documento final" in prompt
-    assert "Não repita o cabeçalho nem as listas de partes e representantes" in prompt
+    assert "Não repita o cabeçalho nem as listas de partes e representantes" in prompt  # nosec B101 - pytest assertion
     assert "Não invente órgão julgador, juiz, relator, fase, situação, justiça gratuita" in prompt
 
 

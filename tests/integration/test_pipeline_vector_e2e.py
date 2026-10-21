@@ -285,7 +285,7 @@ Nenhuma divergência objetiva identificada.
             validation = decode_json_object(summary["validation"], label="summary validation")
             assert validation["passed"] is True
             assert summary["model"] == "claude-sonnet-5"
-            assert summary["prompt_version"] == "process-summary-v6"
+            assert summary["prompt_version"] == "process-summary-v6"  # nosec B101 - pytest assertion
 
             job_states = await conn.fetch(
                 """

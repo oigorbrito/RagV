@@ -268,8 +268,8 @@ async def test_paginated_request_uses_only_lawsuit_for_rag_context(
             assert persisted_header["status"] == "PRIVATE_STATUS_SENTINEL"  # nosec B101 - pytest assertion
             assert persisted_header["distribution_date"] == "2026-06-01T12:00:00Z"  # nosec B101 - pytest assertion
             assert persisted_header["judge"] == "Magistrado Sintético"  # nosec B101 - pytest assertion
-            assert persisted_header["court_unit"] == "Vara Cível Sintética"
-            assert persisted_header["area"] == "Cível"
+            assert persisted_header["court_unit"] == "Vara Cível Sintética"  # nosec B101 - pytest assertion
+            assert persisted_header["area"] == "Cível"  # nosec B101 - pytest assertion
 
             version = await conn.fetchrow(
                 """
@@ -279,14 +279,14 @@ async def test_paginated_request_uses_only_lawsuit_for_rag_context(
                 """,
                 version_id,
             )
-            assert version is not None
+            assert version is not None  # nosec B101 - pytest assertion
             rendered_source = json.dumps(version["source_payload"], ensure_ascii=False)
-            assert version["judit_response_id"] == lawsuit_response_id
-            assert version["judit_request_id"] == request_id
-            assert external_summary not in rendered_source
-            assert summary_personal_id not in rendered_source
-            assert party_personal_id in rendered_source
-            assert "ELETRÔNICAREFER" in rendered_source
+            assert version["judit_response_id"] == lawsuit_response_id  # nosec B101 - pytest assertion
+            assert version["judit_request_id"] == request_id  # nosec B101 - pytest assertion
+            assert external_summary not in rendered_source  # nosec B101 - pytest assertion
+            assert summary_personal_id not in rendered_source  # nosec B101 - pytest assertion
+            assert party_personal_id in rendered_source  # nosec B101 - pytest assertion
+            assert "ELETRÔNICAREFER" in rendered_source  # nosec B101 - pytest assertion
 
             deliveries = await conn.fetch(
                 """
@@ -297,12 +297,12 @@ async def test_paginated_request_uses_only_lawsuit_for_rag_context(
                 """,
                 request_id,
             )
-            assert len(deliveries) == 3
+            assert len(deliveries) == 3  # nosec B101 - pytest assertion
             audit_payload = "\n".join(
                 json.dumps(row["raw_payload"], ensure_ascii=False) for row in deliveries
             )
-            assert external_summary in audit_payload
-            assert summary_personal_id in audit_payload
+            assert external_summary in audit_payload  # nosec B101 - pytest assertion
+            assert summary_personal_id in audit_payload  # nosec B101 - pytest assertion
 
             steps = await conn.fetch(
                 """
@@ -313,19 +313,19 @@ async def test_paginated_request_uses_only_lawsuit_for_rag_context(
                 """,
                 version_id,
             )
-            assert [row["step_number"] for row in steps] == [1, 2, 3, 4]
-            assert [row["metadata"]["source_step_number"] for row in steps] == [10, 20, 30, 40]
-            assert steps[0]["text"] == "Processo Distribuído ELETRÔNICA REFER nos autos."
-            assert steps[1]["text"] == "Audiência de conciliação designada para 03/03/2027 às 15:00."
-            assert steps[2]["text"] == "Intimação. Prazo: 15 dias úteis."
-            assert steps[3]["text"] == "Sentença Proferida CPF [documento removido]"
-            assert steps[0]["metadata"]["occurred_at_sao_paulo"] == "2026-06-10T09:00:00-03:00"
-            assert steps[1]["metadata"]["occurred_at_sao_paulo"] == "2026-06-11T09:00:00-03:00"
-            assert steps[2]["metadata"]["occurred_at_sao_paulo"] == "2026-06-12T09:00:00-03:00"
-            assert steps[3]["metadata"]["occurred_at_sao_paulo"] == "2026-06-13T09:00:00-03:00"
-            assert external_summary not in "\n".join(row["text"] for row in steps)
-            assert summary_personal_id not in "\n".join(row["text"] for row in steps)
-            assert party_personal_id not in "\n".join(row["text"] for row in steps)
+            assert [row["step_number"] for row in steps] == [1, 2, 3, 4]  # nosec B101 - pytest assertion
+            assert [row["metadata"]["source_step_number"] for row in steps] == [10, 20, 30, 40]  # nosec B101 - pytest assertion
+            assert steps[0]["text"] == "Processo Distribuído ELETRÔNICA REFER nos autos."  # nosec B101 - pytest assertion
+            assert steps[1]["text"] == "Audiência de conciliação designada para 03/03/2027 às 15:00."  # nosec B101 - pytest assertion
+            assert steps[2]["text"] == "Intimação. Prazo: 15 dias úteis."  # nosec B101 - pytest assertion
+            assert steps[3]["text"] == "Sentença Proferida CPF [documento removido]"  # nosec B101 - pytest assertion
+            assert steps[0]["metadata"]["occurred_at_sao_paulo"] == "2026-06-10T09:00:00-03:00"  # nosec B101 - pytest assertion
+            assert steps[1]["metadata"]["occurred_at_sao_paulo"] == "2026-06-11T09:00:00-03:00"  # nosec B101 - pytest assertion
+            assert steps[2]["metadata"]["occurred_at_sao_paulo"] == "2026-06-12T09:00:00-03:00"  # nosec B101 - pytest assertion
+            assert steps[3]["metadata"]["occurred_at_sao_paulo"] == "2026-06-13T09:00:00-03:00"  # nosec B101 - pytest assertion
+            assert external_summary not in "\n".join(row["text"] for row in steps)  # nosec B101 - pytest assertion
+            assert summary_personal_id not in "\n".join(row["text"] for row in steps)  # nosec B101 - pytest assertion
+            assert party_personal_id not in "\n".join(row["text"] for row in steps)  # nosec B101 - pytest assertion
 
             generation_jobs = await conn.fetch(
                 """
@@ -334,18 +334,18 @@ async def test_paginated_request_uses_only_lawsuit_for_rag_context(
                 WHERE task_name = 'generate_process_summary'
                 """
             )
-            assert len(generation_jobs) == 1
-            assert str(generation_jobs[0]["status"]) == "completed"
+            assert len(generation_jobs) == 1  # nosec B101 - pytest assertion
+            assert str(generation_jobs[0]["status"]) == "completed"  # nosec B101 - pytest assertion
             job_payload = json.dumps(generation_jobs[0]["payload"], ensure_ascii=False)
-            assert external_summary not in job_payload
-            assert summary_personal_id not in job_payload
-            assert party_personal_id not in job_payload
+            assert external_summary not in job_payload  # nosec B101 - pytest assertion
+            assert summary_personal_id not in job_payload  # nosec B101 - pytest assertion
+            assert party_personal_id not in job_payload  # nosec B101 - pytest assertion
 
             summary_rows = await conn.fetchval(
                 "SELECT count(*) FROM process_summaries WHERE process_id = $1",
                 process["id"],
             )
-            assert summary_rows == 1
+            assert summary_rows == 1  # nosec B101 - pytest assertion
             stored_summary = await conn.fetchrow(
                 """
                 SELECT markdown, validation, version_id
@@ -355,15 +355,15 @@ async def test_paginated_request_uses_only_lawsuit_for_rag_context(
                 process["id"],
                 version_id,
             )
-            assert stored_summary is not None
-            assert stored_summary["version_id"] == version_id
-            assert stored_summary["validation"]["passed"] is True, stored_summary["validation"]
-            assert "## Representantes" in stored_summary["markdown"]
-            assert "Advogada Sintética (representa: Parte Sintética)" in stored_summary["markdown"]
-            assert "Fase registrada: PRIVATE_PHASE_SENTINEL" in stored_summary["markdown"]
-            assert "Situação registrada: PRIVATE_STATUS_SENTINEL" in stored_summary["markdown"]
-            assert "***.***.***-00" not in stored_summary["markdown"]
-            assert representative_personal_id not in stored_summary["markdown"]
+            assert stored_summary is not None  # nosec B101 - pytest assertion
+            assert stored_summary["version_id"] == version_id  # nosec B101 - pytest assertion
+            assert stored_summary["validation"]["passed"] is True, stored_summary["validation"]  # nosec B101 - pytest assertion
+            assert "## Representantes" in stored_summary["markdown"]  # nosec B101 - pytest assertion
+            assert "Advogada Sintética (representa: Parte Sintética)" in stored_summary["markdown"]  # nosec B101 - pytest assertion
+            assert "Fase registrada: PRIVATE_PHASE_SENTINEL" in stored_summary["markdown"]  # nosec B101 - pytest assertion
+            assert "Situação registrada: PRIVATE_STATUS_SENTINEL" in stored_summary["markdown"]  # nosec B101 - pytest assertion
+            assert "***.***.***-00" not in stored_summary["markdown"]  # nosec B101 - pytest assertion
+            assert representative_personal_id not in stored_summary["markdown"]  # nosec B101 - pytest assertion
 
             tenant_id = uuid4()
             bearer_token = "paginated-e2e-tenant-token"
@@ -386,40 +386,40 @@ async def test_paginated_request_uses_only_lawsuit_for_rag_context(
             legacy_response = await client.get(
                 f"/processes/{code}", headers=auth_headers
             )
-            assert legacy_response.status_code == 200
+            assert legacy_response.status_code == 200  # nosec B101 - pytest assertion
             legacy_payload = legacy_response.json()
-            assert legacy_payload["summary_status"] == "available"
-            assert legacy_payload["iaSummary"] == legacy_payload["summary"]["markdown"]
-            assert "Advogada Sintética (representa: Parte Sintética)" in legacy_payload["iaSummary"]
+            assert legacy_payload["summary_status"] == "available"  # nosec B101 - pytest assertion
+            assert legacy_payload["iaSummary"] == legacy_payload["summary"]["markdown"]  # nosec B101 - pytest assertion
+            assert "Advogada Sintética (representa: Parte Sintética)" in legacy_payload["iaSummary"]  # nosec B101 - pytest assertion
 
             jsx_response = await client.get(
                 f"/v1/processos/{code}/resumo?format=jsx", headers=auth_headers
             )
-            assert jsx_response.status_code == 200
-            assert isinstance(jsx_response.json()["iaSummary"], str)
+            assert jsx_response.status_code == 200  # nosec B101 - pytest assertion
+            assert isinstance(jsx_response.json()["iaSummary"], str)  # nosec B101 - pytest assertion
 
             json_response = await client.get(
                 f"/v1/processos/{code}/resumo?format=json", headers=auth_headers
             )
-            assert json_response.status_code == 200
+            assert json_response.status_code == 200  # nosec B101 - pytest assertion
             structured = json_response.json()["iaSummary"]
-            assert structured["schema_version"] == 3
-            assert structured["process"]["header"]["status"] == "PRIVATE_STATUS_SENTINEL"
-            assert structured["process"]["representatives"][0]["represents"] == "Parte Sintética"
-            assert representative_personal_id not in json.dumps(structured, ensure_ascii=False)
+            assert structured["schema_version"] == 3  # nosec B101 - pytest assertion
+            assert structured["process"]["header"]["status"] == "PRIVATE_STATUS_SENTINEL"  # nosec B101 - pytest assertion
+            assert structured["process"]["representatives"][0]["represents"] == "Parte Sintética"  # nosec B101 - pytest assertion
+            assert representative_personal_id not in json.dumps(structured, ensure_ascii=False)  # nosec B101 - pytest assertion
 
             repeated_read = await client.get(
                 f"/v1/processos/{code}/resumo?format=json", headers=auth_headers
             )
-            assert repeated_read.status_code == 200
-            assert repeated_read.json()["iaSummary"] == structured
+            assert repeated_read.status_code == 200  # nosec B101 - pytest assertion
+            assert repeated_read.json()["iaSummary"] == structured  # nosec B101 - pytest assertion
 
         async with pool.acquire() as conn:
-            assert await conn.fetchval(
+            assert await conn.fetchval(  # nosec B101 - pytest assertion
                 "SELECT count(*) FROM process_summaries WHERE process_id = $1",
                 process["id"],
             ) == 1
-            assert await conn.fetchval(
+            assert await conn.fetchval(  # nosec B101 - pytest assertion
                 "SELECT count(*) FROM jobs WHERE task_name='generate_process_summary'"
             ) == 1
     finally:

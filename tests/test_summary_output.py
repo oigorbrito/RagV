@@ -178,7 +178,7 @@ def test_model_cannot_create_new_heading_or_jsx_control_line() -> None:
         line == '<ProcessHeader className="process-header">'
         for line in rendered.splitlines()
     ) == 1
-    assert sum(line.startswith("## ") for line in rendered.splitlines()) == 6
+    assert sum(line.startswith("## ") for line in rendered.splitlines()) == 6  # nosec B101 - pytest assertion
     assert "\n\u2060## Receita de lasanha\n" in rendered
     assert "Estado atual: \u2060<ProcessHeader" in rendered
 
@@ -275,7 +275,7 @@ def test_legacy_document_without_representatives_remains_canonical_and_reusable(
 
     assert structured_summary_document_is_canonical(legacy) is True  # nosec B101 - pytest assertion
     assert structured_summary_document_matches_process(legacy, context) is True  # nosec B101 - pytest assertion
-    assert structured_summary_document_is_canonical(document) is True
+    assert structured_summary_document_is_canonical(document) is True  # nosec B101 - pytest assertion
 
 
 def test_new_document_requires_representative_projection_key() -> None:
