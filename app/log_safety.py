@@ -32,8 +32,29 @@ _SECRET_ENV_NAMES = (
 # Redact credentials embedded in URLs even when the full URL is not available in
 # environment variables (for example when emitted by a lower-level client).
 _URI_CREDENTIALS_RE = re.compile(r"(?P<scheme>[a-zA-Z][a-zA-Z0-9+.-]*://)(?P<user>[^\s/:@]*):(?P<secret>[^\s/@]+)@")
+_QUOTED_AUTHORIZATION_RE = re.compile(
+    r"""(?ix)
+    (?P<prefix>\bauthorization[\"']?\s*[:=]\s*)
+    (?P<quote>[\"'])
+    (?P<scheme>bearer|apikey|basic|token|digest|negotiate|oauth)
+    (?P<spacing>\s+)(?=\S)
+    (?:\\.|(?! (?P=quote) )[^\r\n}])+
+    (?P<closing_quote>(?P=quote)|(?=[}\]]|$))
+    """
+)
+_DIGEST_AUTHORIZATION_RE = re.compile(
+    r"""(?imx)
+    (\bauthorization[\"']?\s*[:=]\s*[\"']?\s*digest\s+)
+    (?=(?:username|realm|nonce|uri|response|algorithm|cnonce|opaque|qop|nc)\s*=)
+    [^\r\n]+
+    """
+)
 _AUTHORIZATION_RE = re.compile(
-    r"(?i)(authorization\s*[:=]\s*(?:bearer|apikey|basic|token|digest|negotiate|oauth)\s+)([^\s,;]+)"
+    r"""(?ix)
+    (\bauthorization[\"']?\s*[:=]\s*[\"']?\s*
+     (?:bearer|apikey|basic|token|digest|negotiate|oauth)\s+)
+    (\[REDACTED\][^\s,;}\"']*|[^\s,;}\"'\]]+)
+    """
 )
 _STRUCTURED_SECRET_RE = re.compile(
     r"""(?ix)
@@ -92,6 +113,17 @@ def sanitize_error_message(value: object, *, max_chars: int = MAX_ERROR_MESSAGE_
     text = _URI_CREDENTIALS_RE.sub(
         lambda match: f"{match.group('scheme')}{match.group('user')}:{REDACTED}@",
         text,
+    )
+    text = _QUOTED_AUTHORIZATION_RE.sub(
+        lambda match: (
+            f"{match.group('prefix')}{match.group('quote')}"
+            f"{match.group('scheme')}{match.group('spacing')}"
+            f"{REDACTED}{match.group('closing_quote')}"
+        ),
+        text,
+    )
+    text = _DIGEST_AUTHORIZATION_RE.sub(
+        lambda match: f"{match.group(1)}{REDACTED}", text
     )
     text = _AUTHORIZATION_RE.sub(
         lambda match: f"{match.group(1)}{REDACTED}", text
