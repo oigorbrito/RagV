@@ -109,6 +109,21 @@ class HomologationPackageTests(unittest.TestCase):
         self.assertIn("requirements/windows-build.txt", text)
         self.assertNotIn("Copy-Item (Join-Path $root '.env')", text)
 
+    def test_package_version_and_instructions_share_canonical_build_identity(self):
+        version = (ROOT / "packaging/windows/version.txt").read_text().strip()
+        self.assertRegex(version, r"^\d+\.\d+\.\d+-hml$")
+        script = (ROOT / "scripts/package_windows_homologation.ps1").read_text(encoding="utf-8-sig")
+        installer = (ROOT / "packaging/windows/RagVDesktop.iss").read_text(encoding="utf-8-sig")
+        instructions = (ROOT / "packaging/windows/HOMOLOGACAO.md").read_text(encoding="utf-8")
+        self.assertIn("packaging/windows/version.txt", script)
+        self.assertIn("@PACKAGE_VERSION@", script)
+        self.assertIn("@PACKAGE_SHA@", script)
+        self.assertNotIn("0.1.3-hml", instructions)
+        self.assertIn("RagVDesktop-Homologacao-@PACKAGE_VERSION@-@PACKAGE_SHA@-Setup.exe", instructions)
+        self.assertIn("_homologation-payload\\INSTRUCOES.md", installer)
+        self.assertIn("#error", installer)
+        self.assertNotIn("MyAppVersion = '0.1", script)
+
     def test_standard_homologation_token_requires_explicit_loopback_markers(self):
         with patch.dict(
             "os.environ",

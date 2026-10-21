@@ -1,6 +1,6 @@
 # RagV Homologação — Grupo Villela
 
-Pacote de homologação, **não é release de produção**. Base da aplicação: `a414b2a1d478ccfbf33611a7c40437dd3f90f3b7`. A revisão do pacote fica no nome do instalador e no diagnóstico instalado.
+Pacote de homologação, **não é release de produção**. A versão, base da aplicação e revisão do pacote são registradas no arquivo `runtime/HOMOLOGACAO.txt` instalado.
 
 ## Pré-requisitos
 
@@ -8,7 +8,7 @@ Windows 10/11 x64, WebView2 Runtime e Docker Desktop iniciado no modo **containe
 
 ## Instalar e utilizar
 
-1. Execute `RagVDesktop-Homologacao-0.1.3-hml-<SHA>-Setup.exe`. Pode escolher uma pasta com espaços. A instalação é por usuário, sem elevação de administrador.
+1. Execute `RagVDesktop-Homologacao-@PACKAGE_VERSION@-@PACKAGE_SHA@-Setup.exe`. O nome exato corresponde à versão e aos primeiros sete caracteres do SHA do pacote. Pode escolher uma pasta com espaços. A instalação é por usuário, sem elevação de administrador.
 2. O pacote completo fica na pasta escolhida: executável, scripts e subpasta `runtime`. A cópia é verificada pelo instalador antes de oferecer a abertura. Não selecione um checkout Git nem a pasta da instalação habitual.
 3. Inicie Docker Desktop e abra o atalho **RagV Homologação**. Uma janela de progresso acompanha o preparo inicial; pode demorar no primeiro build. Nas próximas aberturas, a imagem desta revisão é reutilizada.
 4. A homologação já inicia autenticada: o desktop injeta automaticamente o Bearer padrão de teste e não solicita senha nem token manual. O atalho **Configurar acesso** informa que o ambiente já está autenticado.

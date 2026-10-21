@@ -1,8 +1,8 @@
 ﻿#ifndef MyAppVersion
-  #define MyAppVersion "0.1.2-hml"
+  #error "Use scripts/package_windows_homologation.ps1 to supply the canonical package version."
 #endif
 #ifndef SourceSha
-  #define SourceSha "nao-identificado"
+  #error "Use scripts/package_windows_homologation.ps1 to supply the package SHA."
 #endif
 #define MyAppName "RagV Homologação"
 #define MyAppPublisher "RagV / Grupo Villela"
@@ -34,7 +34,7 @@ Source: "start-homologacao.ps1"; DestDir: "{app}"; Flags: ignoreversion
 Source: "homologacao-common.ps1"; DestDir: "{app}"; Flags: ignoreversion
 Source: "configurar-datajud.ps1"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\..\_homologation-payload\project\*"; DestDir: "{#ProjectDir}"; Flags: recursesubdirs createallsubdirs ignoreversion
-Source: "HOMOLOGACAO.md"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\..\_homologation-payload\INSTRUCOES.md"; DestDir: "{app}"; DestName: "HOMOLOGACAO.md"; Flags: ignoreversion
 
 [Tasks]
 Name: "desktopicon"; Description: "Criar atalho na área de trabalho"; GroupDescription: "Atalhos adicionais:"; Flags: unchecked
