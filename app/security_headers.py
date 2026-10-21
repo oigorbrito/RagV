@@ -22,6 +22,7 @@ SECURITY_RESPONSE_HEADERS = {
     "referrer-policy": "no-referrer",
     "permissions-policy": PERMISSIONS_POLICY,
     "cross-origin-opener-policy": "same-origin",
+    "cross-origin-resource-policy": "same-origin",
     "x-permitted-cross-domain-policies": "none",
 }
 
