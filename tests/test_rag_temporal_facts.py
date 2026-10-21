@@ -24,7 +24,7 @@ def test_negated_or_cancelled_hearing_is_not_annotated_as_scheduled() -> None:
     assert _movement_temporal_facts(  # nosec B101 - pytest assertion
         "Audiência não designada para 03/03/2027 às 15:00."
     ) == {}
-    assert _movement_temporal_facts(
+    assert _movement_temporal_facts(  # nosec B101 - pytest assertion
         "Audiência designada para 03/03/2027, mas posteriormente cancelada."
     ) == {}
 

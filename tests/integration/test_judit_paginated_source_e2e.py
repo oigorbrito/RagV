@@ -102,10 +102,10 @@ async def test_paginated_request_uses_only_lawsuit_for_rag_context(
         assert "Vara Cível Sintética" not in source  # nosec B101 - pytest assertion
         assert "Advogada Sintética" not in source  # nosec B101 - pytest assertion
         assert representative_personal_id not in source  # nosec B101 - pytest assertion
-        assert {
+        assert {  # nosec B101 - pytest assertion
             "scheduled_hearing": {"date": "03/03/2027", "time": "15:00"}
         } in temporal_facts
-        assert {"explicit_period": {"value": 15, "unit_text": "dias úteis"}} in temporal_facts
+        assert {"explicit_period": {"value": 15, "unit_text": "dias úteis"}} in temporal_facts  # nosec B101 - pytest assertion
         _prime_fake_structured_summary(context)
         return rag.render_structured_summary(context["_parsed_summary"], context)
 
@@ -220,7 +220,7 @@ async def test_paginated_request_uses_only_lawsuit_for_rag_context(
                 "/webhooks/judit/paginated-e2e-webhook",
                 json=completion_body,
             )
-            assert duplicate_delivery.status_code == 200
+            assert duplicate_delivery.status_code == 200  # nosec B101 - pytest assertion
 
         worker = Worker(
             pool,
@@ -256,9 +256,9 @@ async def test_paginated_request_uses_only_lawsuit_for_rag_context(
             assert normalized_parties[0]["masked_person_id"] == "***.***.***-44"
             assert party_personal_id not in json.dumps(normalized_parties, ensure_ascii=False)
             normalized_representatives = process["representatives"]
-            assert len(normalized_representatives) == 1
-            assert normalized_representatives[0]["name"] == "Advogada Sintética"
-            assert normalized_representatives[0]["represents"] == "Parte Sintética"
+            assert len(normalized_representatives) == 1  # nosec B101 - pytest assertion
+            assert normalized_representatives[0]["name"] == "Advogada Sintética"  # nosec B101 - pytest assertion
+            assert normalized_representatives[0]["represents"] == "Parte Sintética"  # nosec B101 - pytest assertion
             assert representative_personal_id not in json.dumps(
                 normalized_representatives, ensure_ascii=False
             )
