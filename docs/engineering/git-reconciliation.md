@@ -49,7 +49,7 @@ Mensagem semelhante não foi considerada prova de equivalência.
 | Referência | SHA/head | Funcionalidade | Situação na main | Evidência | Ação recomendada |
 |---|---|---|---|---|---|
 | PR #505 / `codex/block196b-windows-homologation` | `4d3cab7` / merge `f3869ba` | Homologação Windows isolada, autenticação automática, DataJud configurador, contratos | **INTEGRATED** | PR #505 merged; branch contém zero commits exclusivos contra `origin/main` | Preservar baseline e tag |
-| PR #504 / `codex/block194-desktop-update` | merge `a414b2a`; branch atual `3d377dc` | Atualização coordenada e testes de smoke | **INTEGRATED + UNIQUE_PENDING** | `a414b2a` está na main; `e1168f1`, `fae69c4`, `3d377dc` ficaram depois do commit integrado | Não excluir; revisar separadamente se o atualizador voltar ao escopo |
+| PR #504 / `codex/block194-desktop-update` | merge `a414b2a`; commits históricos até `3d377dc` | Atualização coordenada Compose e smoke offline | **INTEGRATED / TREE-EQUIVALENT** | A árvore de `e1168f1` → `fae69c4` → `3d377dc` é idêntica à árvore do merge `a414b2a`; arquivos do updater já estão na main | Não transplantar de novo; manter evidência histórica e validar gaps em mudança isolada |
 | PR #501 / `feat/block176-datajud-queue` | `1b16e06`, merge `36938c8` | Fila PostgreSQL para DataJud | **INTEGRATED** | PR #501 merged; comportamento atual está em `app/datajud_jobs.py`, queue e testes | Preservar código da main; branch histórica |
 | PR #502 / `feat/datajud-independent-lookup` | `e95c742`, merge `097f271` | Lookup independente DataJud e classificação pública | **INTEGRATED** | PR #502 merged; implementação e testes estão na main | Preservar código da main; branch histórica |
 | `feat/datajud-independent-metadata` | `44c5b03` | Limpeza de artefatos locais do staging | **UNIQUE_PENDING** | Branch local não contém a main; patch é limpeza de staging, não baseline funcional | Preservar até decisão explícita |
@@ -157,7 +157,7 @@ As branches remotas e locais completas foram capturadas por `git branch -vv`; n�
 
 **A — Integrados:** PRs #496, #499, #500, #501, #502, #504 e #505, confirmadas por merges remotos e ancestralidade/conteúdo.
 
-**B — Exclusivos preservados:** `0713d5f`, `8f885f1`, `fdc5008`, `e1168f1`, `fae69c4`, `3d377dc`, `b4ee1c8` e os commits das linhas antigas de DataJud/Judit.
+**B — Exclusivos preservados:** `0713d5f`, `8f885f1`, `fdc5008`, `b4ee1c8` e os commits das linhas antigas de DataJud/Judit. Os commits do updater foram reconciliados no Block 242 como tree-equivalent à PR #504.
 
 **C — Equivalentes comprovados:** o range `f3869ba..8f885f1` e o range `f3869ba..794ed51` têm o mesmo patch-id estável `6ba895b4b0164ce8f2aa187ed0272ca224b55142`.
 
@@ -165,7 +165,7 @@ As branches remotas e locais completas foram capturadas por `git branch -vv`; n�
 
 **E — Arquiváveis futuramente:** somente branches/worktrees sem commits exclusivos, após retenção da tag, recovery refs e evidências. Nenhuma foi arquivada neste bloco.
 
-**F — PRs independentes:** PR #506 (documentação/guardrails), `fdc5008` (Inno/atalhos), PR #487 (launcher local) e os três commits do atualizador (`e1168f1`, `fae69c4`, `3d377dc`). Cada grupo tem escopo e validação distintos.
+**F — PRs independentes:** PR #506 (documentação/guardrails), `fdc5008` (Inno/atalhos), PR #487 (launcher local) e metadata cleanup. Os commits do atualizador não formam um grupo exclusivo: sua árvore já está representada na PR #504 integrada.
 
 **G — Não removíveis agora:** tag `datajud-functional-baseline-216`, `recovery/block209-4d3cab7`, instalação 198, perfil/volumes, worktrees históricas, evidências e objetos unreachable sem análise de recuperação.
 
@@ -178,7 +178,7 @@ INTEGRATED:          7 PRs relevantes (#496, #499, #500, #501, #502, #504, #505)
 EQUIVALENT:          1 grupo documental (0713d5f + 8f885f1 ~= 794ed51)
 SUPERSEDED_VERIFIED: 2 linhas (desktop antigo e preparação Judit por etapas)
 REVERTED:           0 comprovados
-UNIQUE_PENDING:      5 grupos (#506, fdc5008, PR #487, três commits do atualizador, metadata cleanup)
+UNIQUE_PENDING:      4 grupos (#506, fdc5008, PR #487, metadata cleanup)
 KEEP_RECOVERY:       2 referências explícitas (tag baseline e recovery/block209)
 HISTORICAL:          worktrees/branches dos blocos anteriores e evidências
 UNKNOWN:             25 commits unreachable + refs não analisadas semanticamente
@@ -188,7 +188,7 @@ UNKNOWN:             25 commits unreachable + refs não analisadas semanticament
 
 ### INTEGRAR
 
-Nenhum grupo deve ser integrado automaticamente. PR #506 está tecnicamente pronta para revisão manual, mas mantém exceção de CI; `fdc5008` requer compilação ISCC e revisão do contrato de instalação; PR #487 requer decisão de produto sobre launcher opcional e correção de seus checks; o atualizador requer validação A→B, assinatura e rollback.
+Nenhum grupo deve ser integrado automaticamente. PR #506 está tecnicamente pronta para revisão manual, mas mantém exceção de CI; `fdc5008` requer compilação ISCC e revisão do contrato de instalação; PR #487 requer decisão de produto sobre launcher opcional e correção de seus checks. O updater Compose está na main; o canal de atualização do EXE permanece bloqueado por assinatura, ciclo A→B e rollback.
 
 ### ARQUIVAR FUTURAMENTE
 
@@ -196,7 +196,6 @@ Somente após confirmação de que não há commits exclusivos necessários, wor
 
 ### INVESTIGAR
 
-- `e1168f1`, `fae69c4`, `3d377dc`: atualizador Windows pós-PR #504, ainda exclusivo.
 - `b4ee1c8`, `47e4f5a`, `6c56be1`: launcher desktop opcional da PR #487.
 - objetos unreachable do `fsck`.
 - branches remotas sem PR ativa e sem relação funcional demonstrada.
@@ -205,7 +204,6 @@ Somente após confirmação de que não há commits exclusivos necessários, wor
 
 Nenhuma limpeza foi executada. Candidatos que exigem decisão explícita:
 
-- branches locais pós-merge com trabalho exclusivo de atualização (`e1168f1`, `fae69c4`, `3d377dc`);
 - `codex/block221-installer-contract`;
 - worktrees históricas;
 - objetos unreachable do `fsck`;
@@ -217,8 +215,15 @@ Não são candidatos seguros enquanto não houver confirmação de ausência de 
 
 1. Revisar/decidir PR #506.
 2. Decidir separadamente o contrato Inno/atalhos de `fdc5008`.
-3. Só depois avaliar branches pós-merge de atualização.
+3. Manter o updater da PR #504 em main; mudanças adicionais exigem validação e PR própria.
 4. Manter a tag `datajud-functional-baseline-216` e a recuperação `recovery/block209-4d3cab7`.
 5. Não remover instalação 198, perfil, volumes, evidências ou worktrees durante essa higiene.
 
-Nenhuma consulta externa, alteração funcional, exclusão ou reescrita de histórico foi realizada neste bloco.
+Nenhuma consulta externa, alteração funcional, exclusão ou reescrita de histórico foi realizada no bloco de reconciliação original.
+
+## Adendo — Block 242 (reconciliação e guardrails do updater)
+
+- A comparação de árvores confirmou que os commits históricos `e1168f1`, `fae69c4` e `3d377dc` não contêm implementação exclusiva a transplantar: o resultado é idêntico ao merge da PR #504 (`a414b2a`). Não foi aberta PR para reaplicar esse conteúdo.
+- A revisão identificou duas falhas defensivas no script Compose já integrado: execuções simultâneas não eram serializadas e um `docker compose run` com exit code zero podia avançar sem arquivo de backup/checksum no destino. A branch isolada `codex/block242-updater-concurrency` adiciona mutex global por checkout, valida presença, tamanho e SHA-256, e rejeita mutex abandonado.
+- Testes com shim de Docker no Windows demonstram exclusão entre processos/sessões (mutex global), independência entre checkouts, falhas de backup antes do build, liberação após exceção e detecção de mutex abandonado. Nenhum Docker real, instalação, volume, serviço ou dado operacional foi alterado.
+- O script atual é um atualizador operacional de imagens/serviços Docker Compose, invocado explicitamente; não é atualizador do EXE/Inno e não implementa a cadeia Authenticode do `verify_windows_update.ps1`. Assinatura do instalador, ciclo A→B em VM descartável e health check real continuam pendentes. O script não executa rollback: após falha no `compose up`, preservar o par backup/checksum, inspecionar migração e serviços e seguir o procedimento manual de recuperação já documentado; restauração real não foi exercitada aqui. Portanto, estes testes locais não validam atualização de produção nem liberam a PR #508.
