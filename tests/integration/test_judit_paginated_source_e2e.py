@@ -366,7 +366,7 @@ async def test_paginated_request_uses_only_lawsuit_for_rag_context(
             assert representative_personal_id not in stored_summary["markdown"]  # nosec B101 - pytest assertion
 
             tenant_id = uuid4()
-            bearer_token = "paginated-e2e-tenant-token"
+            bearer_token = "paginated-e2e-tenant-token"  # nosec B105 - synthetic test credential
             await conn.execute(
                 "INSERT INTO tenants (id, name) VALUES ($1, 'paginated e2e tenant')",
                 tenant_id,
