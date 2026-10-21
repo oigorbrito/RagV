@@ -74,9 +74,9 @@ Movement text is not part of this provenance response. Secret processes already 
 
 When a valid summary exists, `usage` exposes only local persisted generation metadata (`model`, `prompt_version`, `generation_ms`). Token accounting is not fabricated when it is not persisted.
 
-`validation` is the persisted post-generation validation envelope. `iaSummary` is populated only when that validation passed.
+`validation` is the persisted post-generation validation envelope. `iaSummary` is populated only when that validation passed. The frontend renders the JSX/Markdown string from `iaSummary` when the legacy nested `summary.markdown` field is absent; it deliberately does not interpret structured JSON `iaSummary` as Markdown.
 
-`format=jsx` is the default and returns the deterministic Markdown/allowlisted-JSX document in `iaSummary`. `format=json` returns the persisted structured representation built from the same validated provider payload and normalized process identity. Selecting JSON does not invoke the model again and does not parse the rendered JSX. The JSON representation is versioned with `schema_version`; its top-level fields are `process` and `summary`.
+`format=jsx` is the default and returns the deterministic Markdown/allowlisted-JSX document in `iaSummary`. `format=json` returns the persisted structured representation built from the same validated provider payload and normalized process identity. Selecting JSON does not invoke the model again and does not parse the rendered JSX. The JSON representation is versioned with `schema_version`; its top-level fields are `process` and `summary`. Schema version 3 adds the allowlisted `process.representatives` projection. Version 2 documents remain readable as legacy records and may omit that property; new version 3 documents require it (an empty list means no representative was recorded).
 
 The selected format participates in the normalized idempotency fingerprint and is stored with the public request. Polling `GET /v1/resumos/{job_id}` therefore keeps the representation chosen when the job was created. `GET /v1/processos/{cnj}/resumo` also accepts `?format=jsx|json` for representation selection of an already validated summary.
 

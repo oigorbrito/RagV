@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 from datetime import datetime, timezone
 from time import perf_counter
 from typing import Any
@@ -78,7 +79,26 @@ OPUS_STEP_THRESHOLD = 100
 SHORT_SUMMARY_STEP_MAX = 15
 MEDIUM_SUMMARY_STEP_MAX = 60
 MAX_TOKENS = 4000
-PROMPT_VERSION = "process-summary-v5"
+PROMPT_VERSION = "process-summary-v6"
+_RENDER_ONLY_HEADER_FIELDS = frozenset(
+    {"phase", "status", "distribution_date", "judge", "court_unit"}
+)
+_HEARING_DESIGNATION_RE = re.compile(
+    r"\bAUDI[ÊE]NCIA\b.{0,240}?\bDESIGNAD[AO]\b", re.IGNORECASE
+)
+_DATE_TIME_RE = re.compile(
+    r"(?P<date>\d{2}/\d{2}/\d{4})(?:\s+(?:às|as)\s+(?P<time>\d{2}:\d{2}))?",
+    re.IGNORECASE,
+)
+_NEGATED_HEARING_RE = re.compile(
+    r"\b(?:N[ÃA]O|NUNCA)\b.{0,80}\bDESIGNAD[AO]\b|"
+    r"\bDESIGNAD[AO]\b.{0,80}\bCANCELAD[AO]\b",
+    re.IGNORECASE,
+)
+_EXPLICIT_PERIOD_RE = re.compile(
+    r"\bPRAZO\s*:?\s*(?:DE\s+)?(?P<value>\d+)\s*(?P<unit>DIAS?(?:\s+ÚTEIS?)?)\b",
+    re.IGNORECASE,
+)
 REQUESTED_TEMPERATURE = 0.2
 # Anthropic deprecates custom sampling parameters for current Claude models.
 # Keep the product's requested value documented but omit it from API payloads.
@@ -164,6 +184,28 @@ def _provider_datetime(value: Any) -> str | None:
     return value.astimezone(_SAO_PAULO).isoformat()
 
 
+def _movement_temporal_facts(text: str) -> dict[str, Any]:
+    facts: dict[str, Any] = {}
+    designation = _HEARING_DESIGNATION_RE.search(text)
+    if designation:
+        scheduled_date = _DATE_TIME_RE.search(text, designation.end())
+        if scheduled_date and not _NEGATED_HEARING_RE.search(
+            text[designation.start() : scheduled_date.end() + 80]
+        ):
+            event: dict[str, str] = {"date": scheduled_date.group("date")}
+            if scheduled_date.group("time"):
+                event["time"] = scheduled_date.group("time")
+            facts["scheduled_hearing"] = event
+
+    period = _EXPLICIT_PERIOD_RE.search(text)
+    if period:
+        facts["explicit_period"] = {
+            "value": int(period.group("value")),
+            "unit_text": re.sub(r"\s+", " ", period.group("unit")).lower(),
+        }
+    return facts
+
+
 def _serialize_steps(ranked: list[Any]) -> list[dict[str, Any]]:
     _, step_max, steps_total_max = provider_context_limits()
     texts = [
@@ -194,6 +236,9 @@ def _serialize_steps(ranked: list[Any]) -> list[dict[str, Any]]:
                 else None
             ),
             "text": text,
+            "source_temporal_facts": _movement_temporal_facts(
+                str(item.step.text or "")
+            ),
         }
         for item, text in zip(ranked, texts, strict=True)
     ]
@@ -466,6 +511,14 @@ def _provider_payload(context: dict[str, Any]) -> tuple[dict[str, Any], list[Any
             for key, value in context.items()
             if key != "steps" and not key.startswith("_")
         }
+        raw_process.pop("representatives", None)
+        header = raw_process.get("header")
+        if isinstance(header, dict):
+            raw_process["header"] = {
+                key: value
+                for key, value in header.items()
+                if key not in _RENDER_ONLY_HEADER_FIELDS
+            }
         raw_steps = list(context.get("steps", []))
 
     if not _is_secret_context(context):
@@ -497,18 +550,33 @@ def _prompt_json(value: Any) -> str:
 
 
 def _validate_provider_summary(text: str, context: dict[str, Any]) -> ValidationResult:
+    header = context.get("header")
+    distribution_date = header.get("distribution_date") if isinstance(header, dict) else None
+    additional_source_dates: list[str] = []
+    if isinstance(distribution_date, str):
+        try:
+            parsed_distribution_date = datetime.fromisoformat(
+                distribution_date.replace("Z", "+00:00")
+            )
+        except ValueError:
+            pass
+        else:
+            additional_source_dates.append(parsed_distribution_date.date().isoformat())
+
     result = validar(
         text=text,
         code=context["code"],
         parties=context.get("parties", []),
         expected_step_count=int(context.get("step_count") or 0),
         source_text=_provider_source_text(context),
+        additional_source_dates=additional_source_dates,
         require_attention_section=True,
         required_attention_phrases=list(context.get("source_warnings", [])),
         require_document_title=True,
         allowed_headings=(
             "Resumo do processo",
             "Partes",
+            "Representantes",
             "Classe",
             "Assuntos",
             "Movimentações",
@@ -740,6 +808,7 @@ async def _summary_row_is_publishable(
             "court": row["process_court"],
             "header": row["process_header"],
             "parties": row["process_parties"],
+            "representatives": row["process_representatives"],
         },
     )
 
@@ -779,7 +848,8 @@ async def _persist_summary(
                    p.class_name AS process_class_name,
                    p.court AS process_court,
                    p.header AS process_header,
-                   p.parties AS process_parties
+                   p.parties AS process_parties,
+                   p.representatives AS process_representatives
             FROM process_summaries ps
             JOIN processes p ON p.id = ps.process_id
             WHERE ps.process_id = $1 AND ps.version_id = $2
@@ -842,6 +912,7 @@ async def _persist_summary(
                         "court": existing["process_court"],
                         "header": existing["process_header"],
                         "parties": existing["process_parties"],
+                        "representatives": existing["process_representatives"],
                     },
                 )
         replace_approved = False
@@ -944,7 +1015,8 @@ async def _load_publishable_summary(
                    p.class_name AS process_class_name,
                    p.court AS process_court,
                    p.header AS process_header,
-                   p.parties AS process_parties
+                   p.parties AS process_parties,
+                   p.representatives AS process_representatives
             FROM process_summaries ps
             JOIN processes p
               ON p.id = ps.process_id

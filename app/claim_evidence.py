@@ -347,6 +347,12 @@ def claim_evidence_is_publishable(
                 process["parties"],
                 label="summary process parties",
             ),
+            "representatives": decode_json_list(
+                process["representatives"]
+                if "representatives" in getattr(process, "keys", lambda: [])()
+                else [],
+                label="summary process representatives",
+            ),
         }
     except (KeyError, TypeError, ValueError):
         return False

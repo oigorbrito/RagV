@@ -430,6 +430,7 @@ def validar(
     steps: list[dict[str, Any]] | None = None,
     expected_step_count: int | None = None,
     source_text: str | None = None,
+    additional_source_dates: list[str] | None = None,
     require_attention_section: bool = False,
     required_attention_phrases: list[str] | None = None,
     forbid_party_names: bool = False,
@@ -483,6 +484,8 @@ def validar(
 
     if source_text is not None:
         allowed_dates = _source_dates(source_text)
+        for source_date in additional_source_dates or []:
+            allowed_dates.update(_source_dates(source_date))
         for generated_date in sorted(_dates(text) - allowed_dates):
             errors.append(f"date not present in source context: {generated_date}")
         errors.extend(_source_backed_claim_errors(text, source_text))

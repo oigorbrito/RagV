@@ -93,6 +93,11 @@ async def test_existing_valid_summary_skips_context_retrieval_and_providers(monk
         async with pool.acquire() as conn:
             process_id, version_id, code = await _fixture(conn)
             claim_context, payload, claims = _claim_material(code, version_id)
+            legacy_structured_output = structured_summary_document(
+                payload, claim_context
+            )
+            legacy_structured_output["schema_version"] = 2
+            legacy_structured_output["process"].pop("representatives")
             assert await _persist_summary(
                 conn,
                 process_id=process_id,
@@ -100,9 +105,7 @@ async def test_existing_valid_summary_skips_context_retrieval_and_providers(monk
                 text="accepted summary",
                 validation={"passed": True, "errors": []},
                 generation_ms=123,
-                structured_output=structured_summary_document(
-                    payload, claim_context
-                ),
+                structured_output=legacy_structured_output,
                 claims=claims,
                 evidence_sources=evidence_catalog(claim_context),
             )
@@ -319,7 +322,7 @@ Nenhuma divergência objetiva identificada."""
         assert result["reused"] is False
         assert stored["markdown"] == repaired_summary
         assert stored["model"] == "claude-sonnet-5"
-        assert stored["prompt_version"] == "process-summary-v5"
+        assert stored["prompt_version"] == "process-summary-v6"  # nosec B101 - pytest assertion
         assert claim_count == 3
     finally:
         await pool.close()
@@ -400,7 +403,7 @@ async def test_approved_summary_replacement_requires_publishable_restricted_docu
             )
             assert unchanged["markdown"] == "approved public summary"
             assert unchanged["model"] == "claude-sonnet-5"
-            assert unchanged["prompt_version"] == "process-summary-v5"
+            assert unchanged["prompt_version"] == "process-summary-v6"  # nosec B101 - pytest assertion
 
             assert await _persist_summary(
                 conn,

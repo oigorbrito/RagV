@@ -33,6 +33,7 @@ async def _complete_from_current_summary(
                p.court,
                p.header,
                p.parties,
+               p.representatives,
                ps.id AS summary_id,
                ps.structured_output,
                ps.model,

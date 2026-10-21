@@ -80,13 +80,40 @@ def test_parser_rejects_extra_fields_and_wrong_types() -> None:
 
 
 def test_renderer_owns_document_structure_and_source_identity() -> None:
-    rendered = render_structured_summary(_payload(), _context())
+    context = _context() | {
+        "header": {
+            "phase": "INICIAL",
+            "status": "ATIVO",
+            "distribution_date": "2026-01-10",
+            "judge": "Magistrado de teste",
+            "court_unit": "Vara de teste",
+        },
+        "representatives": [
+            {
+                "name": "Advogado de teste",
+                "masked_person_id": "***.***.***-01",
+                "represents": "Maria da Silva",
+                "document": "OAB must not appear",
+            },
+            {"name": "Outro representante", "represents": "Pessoa de fora"},
+        ],
+    }
+    rendered = render_structured_summary(_payload(), context)
 
     assert rendered.startswith("# Resumo do processo")
     assert "- Processo: 0000000-00.2026.8.21.0001" in rendered
     assert "- Classe: Procedimento Comum" in rendered
     assert "- Tribunal: TJRS" in rendered
     assert "## Partes\n- Maria da Silva" in rendered
+    assert "## Representantes\n- Advogado de teste (representa: Maria da Silva)" in rendered  # nosec B101 - pytest assertion
+    assert "Fase registrada: INICIAL" in rendered  # nosec B101 - pytest assertion
+    assert "Situação registrada: ATIVO" in rendered  # nosec B101 - pytest assertion
+    assert "Data de distribuição registrada: 2026-01-10" in rendered  # nosec B101 - pytest assertion
+    assert "Magistrado de teste" in rendered  # nosec B101 - pytest assertion
+    assert "Vara de teste" in rendered  # nosec B101 - pytest assertion
+    assert "***.***.***-01" not in rendered  # nosec B101 - pytest assertion
+    assert "OAB must not appear" not in rendered  # nosec B101 - pytest assertion
+    assert "representa: Pessoa de fora" not in rendered  # nosec B101 - pytest assertion
     assert "\nSíntese factual.\n" in rendered
     assert "## Classe\nProcedimento Comum" in rendered
     assert "## Assuntos\n- Responsabilidade civil" in rendered
@@ -100,6 +127,7 @@ def test_renderer_owns_document_structure_and_source_identity() -> None:
     ]
     assert headings == [
         "Partes",
+        "Representantes",
         "Classe",
         "Assuntos",
         "Movimentações",
@@ -125,6 +153,7 @@ def test_renderer_keeps_attention_before_conditional_sections() -> None:
 
     assert headings == [
         "Partes",
+        "Representantes",
         "Classe",
         "Assuntos",
         "Movimentações",
@@ -149,7 +178,7 @@ def test_model_cannot_create_new_heading_or_jsx_control_line() -> None:
         line == '<ProcessHeader className="process-header">'
         for line in rendered.splitlines()
     ) == 1
-    assert sum(line.startswith("## ") for line in rendered.splitlines()) == 5
+    assert sum(line.startswith("## ") for line in rendered.splitlines()) == 6  # nosec B101 - pytest assertion
     assert "\n\u2060## Receita de lasanha\n" in rendered
     assert "Estado atual: \u2060<ProcessHeader" in rendered
 
@@ -174,11 +203,21 @@ def test_json_document_uses_same_validated_payload_and_normalized_identity() -> 
                 "internal": "omit",
             }
         ],
+        "representatives": [
+            {
+                "name": "Advogado de teste",
+                "side": "Active",
+                "person_type": "ADVOGADO",
+                "masked_person_id": "***.***.***-01",
+                "represents": "Maria da Silva",
+                "document": "must omit",
+            }
+        ],
     }
 
     document = structured_summary_document(payload, context)
 
-    assert document["schema_version"] == 2
+    assert document["schema_version"] == 3  # nosec B101 - pytest assertion
     assert document["process"] == {
         "cnj": "0000000-00.2026.8.21.0001",
         "class_name": "Procedimento Comum",
@@ -192,9 +231,20 @@ def test_json_document_uses_same_validated_payload_and_normalized_identity() -> 
                 "masked_person_id": "***.***.***-01",
             }
         ],
+        "representatives": [
+            {
+                "name": "Advogado de teste",
+                "side": "Active",
+                "person_type": "ADVOGADO",
+                "masked_person_id": "***.***.***-01",
+                "represents": "Maria da Silva",
+            }
+        ],
     }
     assert document["summary"] == payload
     assert "internal" not in json.dumps(document, ensure_ascii=False)
+    assert "must omit" not in json.dumps(document, ensure_ascii=False)  # nosec B101 - pytest assertion
+    assert "12345678901" not in json.dumps(document, ensure_ascii=False)  # nosec B101 - pytest assertion
 
 
 def test_persisted_document_process_projection_must_match_context() -> None:
@@ -212,6 +262,30 @@ def test_persisted_document_process_projection_must_match_context() -> None:
     }
     assert structured_summary_document_is_canonical(tampered) is True
     assert structured_summary_document_matches_process(tampered, context) is False
+
+
+def test_legacy_document_without_representatives_remains_canonical_and_reusable() -> None:
+    context = _context() | {
+        "representatives": [{"name": "Advogado legado", "represents": "Maria da Silva"}]
+    }
+    document = structured_summary_document(_payload(), context)
+    legacy_process = dict(document["process"])
+    legacy_process.pop("representatives")
+    legacy = {**document, "schema_version": 2, "process": legacy_process}
+
+    assert structured_summary_document_is_canonical(legacy) is True  # nosec B101 - pytest assertion
+    assert structured_summary_document_matches_process(legacy, context) is True  # nosec B101 - pytest assertion
+    assert structured_summary_document_is_canonical(document) is True  # nosec B101 - pytest assertion
+
+
+def test_new_document_requires_representative_projection_key() -> None:
+    document = structured_summary_document(_payload(), _context())
+    process = dict(document["process"])
+    process.pop("representatives")
+
+    assert structured_summary_document_is_canonical(  # nosec B101 - pytest assertion
+        {**document, "process": process}
+    ) is False
 
 
 def test_persisted_document_validator_rejects_noncanonical_shape() -> None:

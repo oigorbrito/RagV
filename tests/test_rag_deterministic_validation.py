@@ -59,14 +59,48 @@ def test_provider_payload_exposes_total_count_not_only_retrieved_count() -> None
     assert len(steps) == 20
 
 
-def test_wired_validation_uses_total_count_and_exact_provider_dates() -> None:
+def test_render_only_metadata_is_not_sent_to_provider() -> None:
+    context = _context()
+    context["header"] = {
+        "instance": 1,
+        "phase": "PRIVATE_PHASE_SENTINEL",
+        "status": "PRIVATE_STATUS_SENTINEL",
+        "distribution_date": "2026-09-10",
+        "judge": "PRIVATE_JUDGE_SENTINEL",
+        "court_unit": "PRIVATE_COURT_SENTINEL",
+    }
+    context["representatives"] = [
+        {"name": "PRIVATE_REPRESENTATIVE_SENTINEL"}
+    ]
+
+    process, _ = _provider_payload(context)
+
+    assert "representatives" not in process  # nosec B101 - pytest assertion
+    assert process["header"] == {"instance": 1}  # nosec B101 - pytest assertion
+    assert not any(  # nosec B101 - pytest assertion
+        sentinel in repr(process)
+        for sentinel in (
+            "PRIVATE_PHASE_SENTINEL",
+            "PRIVATE_STATUS_SENTINEL",
+            "PRIVATE_JUDGE_SENTINEL",
+            "PRIVATE_COURT_SENTINEL",
+            "PRIVATE_REPRESENTATIVE_SENTINEL",
+        )
+    )
+
+
+def test_wired_validation_accepts_renderer_only_distribution_date_from_source() -> None:
+    context = _context()
+    provider_process, _ = _provider_payload(context)
+    assert "distribution_date" not in provider_process["header"]  # nosec B101 - pytest assertion
+
     result = _validate_provider_summary(
         (
             "# Resumo do processo\n"
             "O processo possui 200 movimentos e foi distribuído em 10/09/2026.\n\n"
             "## Pontos de atenção\nNenhuma divergência objetiva identificada."
         ),
-        _context(),
+        context,
     )
     assert result.passed is True
 

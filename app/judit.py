@@ -12,6 +12,10 @@ from zoneinfo import ZoneInfo
 _CNJ_CANONICAL_RE = re.compile(r"^\d{7}-\d{2}\.\d{4}\.\d\.\d{2}\.\d{4}$")
 _CNJ_DIGITS_RE = re.compile(r"^\d{20}$")
 _PERSONAL_ID_RE = re.compile(r"(?<!\d)(?:\d{11}|\d{14})(?!\d)")
+_FORMATTED_PERSONAL_ID_RE = re.compile(
+    r"(?<!\d)(?:\d{3}[. ]?\d{3}[. ]?\d{3}[- ]?\d{2}|"
+    r"\d{2}[. ]?\d{3}[. ]?\d{3}/?\d{4}[- ]?\d{2})(?!\d)"
+)
 _LEADING_STEP_NUMBER_RE = re.compile(r"^\s*\d+\s*(?:[-–—.:)]\s*|\s+)")
 _ELETRONICA_REFER_RE = re.compile(r"\bELETRÔNICAREFER\b", re.IGNORECASE)
 _GLUE_BOUNDARY_RE = re.compile(r"(?<=[a-záàâãéêíóôõúç])(?=[A-ZÁÀÂÃÉÊÍÓÔÕÚÇ])")
@@ -36,7 +40,19 @@ _PUBLIC_HEADER_KEYS = (
     "name",
     *_SECRET_HEADER_KEYS,
     "amount",
+    "phase",
+    "status",
+    "distribution_date",
+    "judge",
+    "court_unit",
 )
+_PUBLIC_SOURCE_HEADER_LIMITS = {
+    "phase": 160,
+    "status": 160,
+    "distribution_date": 64,
+    "judge": 240,
+    "court_unit": 240,
+}
 _REPRESENTATIVE_PERSON_TYPES = {
     "ADVOGADO",
     "ADVOGADA",
@@ -308,6 +324,17 @@ def _safe_subjects(process: dict[str, Any]) -> list[dict[str, Any]]:
     return safe
 
 
+def _safe_public_source_header(value: Any, *, limit: int) -> str | None:
+    if isinstance(value, dict):
+        value = value.get("name") or value.get("description") or value.get("value")
+    if isinstance(value, bool) or not isinstance(value, (str, int, float)):
+        return None
+    rendered = _WHITESPACE_RE.sub(" ", str(value)).strip()
+    rendered = _PERSONAL_ID_RE.sub("[documento removido]", rendered)
+    rendered = _FORMATTED_PERSONAL_ID_RE.sub("[documento removido]", rendered)
+    return rendered[:limit] or None
+
+
 def _parse_datetime(value: Any) -> datetime | None:
     if value is None or value == "":
         return None
@@ -406,6 +433,16 @@ def extract_promotable_fields(process: dict[str, Any]) -> dict[str, Any]:
         for key in header_keys
         if process.get(key) is not None
     }
+    if secrecy_level == 0:
+        courts = process.get("courts") or []
+        if courts and isinstance(courts[0], dict):
+            header["court_unit"] = courts[0].get("name")
+        for key, limit in _PUBLIC_SOURCE_HEADER_LIMITS.items():
+            safe_value = _safe_public_source_header(header.get(key), limit=limit)
+            if safe_value is None:
+                header.pop(key, None)
+            else:
+                header[key] = safe_value
     if secrecy_level == 0 and class_code is not None:
         rendered_class_code = str(class_code).strip()
         if rendered_class_code:

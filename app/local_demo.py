@@ -46,7 +46,7 @@ async def seed_demo(database_url: str) -> None:
             existing = await conn.fetchrow(
                 """
                 SELECT p.id, p.code, p.class_name, p.court, p.header, p.parties,
-                       p.current_version_id
+                       p.representatives, p.current_version_id
                 FROM processes p
                 JOIN tenant_processes tp ON tp.process_id = p.id
                 WHERE tp.tenant_id = $1 AND p.code = $2

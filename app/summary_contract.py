@@ -2,6 +2,7 @@ from __future__ import annotations
 
 CORE_SECTION_ORDER = (
     "Partes",
+    "Representantes",
     "Classe",
     "Assuntos",
     "Movimentações",

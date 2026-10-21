@@ -242,6 +242,7 @@ async def test_secret_process_completes_locally_without_any_ai_provider(
                 "court": None,
                 "header": {"instance": 1, "area": "Cível", "state": "RS"},
                 "parties": [],
+                "representatives": [],
             }
 
             leaked_summary_text = {
