@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import io
+from unittest import TestCase
 
 import pytest
 from pypdf import PdfWriter
@@ -152,8 +153,8 @@ def test_pdf_parser_resource_limit_is_attachment_local():
             content_type="application/pdf",
             limits=AttachmentProcessingLimits(max_bytes=50_000, chunk_chars=256),
         )
-    assert exc_info.value.error_code == "pdf_processing_limit_exceeded"
-    assert exc_info.value.status == "unreadable"
+    TestCase().assertEqual(exc_info.value.error_code, "pdf_processing_limit_exceeded")
+    TestCase().assertEqual(exc_info.value.status, "unreadable")
 
 
 def test_pdf_stream_array_limit_is_attachment_local():
@@ -164,8 +165,8 @@ def test_pdf_stream_array_limit_is_attachment_local():
             content_type="application/pdf",
             limits=AttachmentProcessingLimits(max_bytes=10 * 1024 * 1024, chunk_chars=256),
         )
-    assert exc_info.value.error_code == "pdf_processing_limit_exceeded"
-    assert exc_info.value.status == "unreadable"
+    TestCase().assertEqual(exc_info.value.error_code, "pdf_processing_limit_exceeded")
+    TestCase().assertEqual(exc_info.value.status, "unreadable")
 
 
 def test_pdf_eof_in_standard_xref_is_controlled_corrupt_failure():
@@ -175,8 +176,8 @@ def test_pdf_eof_in_standard_xref_is_controlled_corrupt_failure():
             content_type="application/pdf",
             limits=AttachmentProcessingLimits(max_bytes=50_000, chunk_chars=256),
         )
-    assert exc_info.value.error_code == "invalid_pdf"
-    assert exc_info.value.status == "corrupt"
+    TestCase().assertEqual(exc_info.value.error_code, "invalid_pdf")
+    TestCase().assertEqual(exc_info.value.status, "corrupt")
 
 
 @pytest.mark.asyncio
@@ -195,12 +196,15 @@ async def test_pdf_parser_resource_limit_remains_controlled_in_worker_protocol()
             "data_b64": base64.b64encode(data).decode("ascii"),
         }
     )
-    assert response == {
-        "version": PROTOCOL_VERSION,
-        "ok": False,
-        "status": "unreadable",
-        "error_code": "pdf_processing_limit_exceeded",
-    }
+    TestCase().assertEqual(
+        response,
+        {
+            "version": PROTOCOL_VERSION,
+            "ok": False,
+            "status": "unreadable",
+            "error_code": "pdf_processing_limit_exceeded",
+        },
+    )
 
 
 
