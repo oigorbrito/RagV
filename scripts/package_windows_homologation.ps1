@@ -2,11 +2,15 @@
     [string]$AppSha = 'a414b2a1d478ccfbf33611a7c40437dd3f90f3b7',
     [Parameter(Mandatory = $true)]
     [ValidatePattern('^[a-f0-9]{40}$')]
-    [string]$PackageSha,
-    [string]$Version = '0.1.2-hml'
+    [string]$PackageSha
 )
 $ErrorActionPreference = 'Stop'
 $root = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
+$Version = (Get-Content (Join-Path $root 'packaging/windows/version.txt') -Raw -Encoding ASCII).Trim()
+if ($Version -notmatch '^[0-9]+\.[0-9]+\.[0-9]+-hml$') { throw 'Versão inválida em packaging/windows/version.txt.' }
+$head = (git -C $root rev-parse HEAD).Trim()
+if ($head -ne $PackageSha) { throw "PackageSha deve corresponder ao HEAD ($head)." }
+if (git -C $root status --porcelain --untracked-files=normal) { throw 'O build exige uma árvore de fontes limpa.' }
 $short = $PackageSha.Substring(0,7)
 $payload = Join-Path $root '_homologation-payload'
 $dist = Join-Path $root 'dist'
@@ -34,7 +38,9 @@ foreach ($dir in @('app','sql','scripts','data','requirements')) {
 }
 $overlay = Join-Path $project 'compose.homologacao.yaml'
 (Get-Content $overlay -Raw -Encoding UTF8).Replace('ragv-homologacao:a414b2a1', "ragv-homologacao:$($PackageSha.Substring(0,12))") | Set-Content $overlay -Encoding utf8
-Copy-Item (Join-Path $root 'packaging/windows/HOMOLOGACAO.md') (Join-Path $payload 'INSTRUCOES.md')
+$instructions = Get-Content (Join-Path $root 'packaging/windows/HOMOLOGACAO.md') -Raw -Encoding UTF8
+$instructions = $instructions.Replace('@PACKAGE_VERSION@', $Version).Replace('@PACKAGE_SHA@', $short)
+$instructions | Set-Content (Join-Path $payload 'INSTRUCOES.md') -Encoding UTF8
 Set-Content (Join-Path $project 'HOMOLOGACAO.txt') "RagV Homologação`nApplication base SHA: $AppSha`nPackage SHA: $PackageSha`nPackage version: $Version" -Encoding utf8
 
 py -3.12 -m venv $venv
@@ -67,7 +73,7 @@ $outFile = Join-Path $installerOut "RagVDesktop-Homologacao-$Version-$short-Setu
 if (-not (Test-Path $outFile)) { throw 'Inno Setup não produziu o instalador esperado.' }
 $hash = (Get-FileHash $outFile -Algorithm SHA256).Hash.ToLowerInvariant()
 @("File: $(Split-Path $outFile -Leaf)","SHA256: $hash","Application base SHA: $AppSha","Package revision: $PackageSha") | Set-Content (Join-Path $installerOut 'SHA256SUMS.txt') -Encoding ascii
-Copy-Item (Join-Path $root 'packaging/windows/HOMOLOGACAO.md') $installerOut
+Copy-Item (Join-Path $payload 'INSTRUCOES.md') (Join-Path $installerOut 'HOMOLOGACAO.md')
 Write-Output "INSTALLER=$outFile"
 Write-Output "SHA256=$hash"
 Write-Output "APP_SHA=$AppSha"

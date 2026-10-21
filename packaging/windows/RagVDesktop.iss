@@ -1,8 +1,8 @@
 ﻿#ifndef MyAppVersion
-  #define MyAppVersion "0.1.2-hml"
+  #error "Use scripts/package_windows_homologation.ps1 to supply the canonical package version."
 #endif
 #ifndef SourceSha
-  #define SourceSha "nao-identificado"
+  #error "Use scripts/package_windows_homologation.ps1 to supply the package SHA."
 #endif
 #define MyAppName "RagV Homologação"
 #define MyAppPublisher "RagV / Grupo Villela"
@@ -15,7 +15,7 @@ AppName={#MyAppName}
 AppVersion={#MyAppVersion}
 AppPublisher={#MyAppPublisher}
 DefaultDirName={localappdata}\Programs\RagV Homologacao
-UsePreviousAppDir=no
+UsePreviousAppDir=yes
 DisableDirPage=no
 DefaultGroupName=RagV Homologação
 OutputDir=..\..\dist-installer
@@ -34,11 +34,15 @@ Source: "start-homologacao.ps1"; DestDir: "{app}"; Flags: ignoreversion
 Source: "homologacao-common.ps1"; DestDir: "{app}"; Flags: ignoreversion
 Source: "configurar-datajud.ps1"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\..\_homologation-payload\project\*"; DestDir: "{#ProjectDir}"; Flags: recursesubdirs createallsubdirs ignoreversion
-Source: "HOMOLOGACAO.md"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\..\_homologation-payload\INSTRUCOES.md"; DestDir: "{app}"; DestName: "HOMOLOGACAO.md"; Flags: ignoreversion
+
+[Tasks]
+Name: "desktopicon"; Description: "Criar atalho na área de trabalho"; GroupDescription: "Atalhos adicionais:"; Flags: unchecked
 
 [Icons]
-Name: "{autoprograms}\RagV Homologação"; Filename: "{#PowerShellExe}"; Parameters: "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File ""{app}\start-homologacao.ps1"""; WorkingDir: "{app}"
-Name: "{autoprograms}\Configurar DataJud - RagV Homologação"; Filename: "{#PowerShellExe}"; Parameters: "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File ""{app}\configurar-datajud.ps1"""; WorkingDir: "{app}"
+Name: "{autoprograms}\RagV Homologação"; Filename: "{#PowerShellExe}"; Parameters: "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File ""{app}\start-homologacao.ps1"""; WorkingDir: "{app}"; IconFilename: "{app}\RagVDesktop.exe"
+Name: "{autoprograms}\Configurar DataJud - RagV Homologação"; Filename: "{#PowerShellExe}"; Parameters: "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File ""{app}\configurar-datajud.ps1"""; WorkingDir: "{app}"; IconFilename: "{app}\RagVDesktop.exe"
+Name: "{userdesktop}\RagV Homologação"; Filename: "{#PowerShellExe}"; Parameters: "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File ""{app}\start-homologacao.ps1"""; WorkingDir: "{app}"; IconFilename: "{app}\RagVDesktop.exe"; Tasks: desktopicon
 
 [Run]
 Filename: "{#PowerShellExe}"; Parameters: "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File ""{app}\start-homologacao.ps1"""; Description: "Abrir RagV Homologação"; Flags: postinstall skipifsilent unchecked
