@@ -42,7 +42,7 @@ For each page with extractable text:
 
 Malformed/non-PDF bytes are `corrupt`. Password-protected PDFs are `unreadable` because Rpy has no authorized password contract. PDFs with no extractable text layer are `unreadable` with `pdf_text_unavailable`; they are not silently treated as empty or sent to an external service. That state is the explicit handoff point for the future local OCR path.
 
-`pypdf` is pinned through the repository dependency lock. Raw PDF bytes are never persisted by this layer.
+`pypdf` is pinned through the repository dependency lock at 6.21.0. This release includes upstream bounds on per-stream decode/parsing work, filter count, nested array/dictionary elements, and form-field traversal. When a parser bound is reached, Rpy records the failure as attachment-local `unreadable/pdf_processing_limit_exceeded`; it returns no partial chunks and does not fall back to OCR for a complexity-limit failure. This intentionally means an unusually complex but otherwise valid PDF can be unreadable. Raw PDF bytes are never persisted by this layer.
 
 ## Phase 4: authorized retrieval and summary provenance
 

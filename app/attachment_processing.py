@@ -14,7 +14,7 @@ from uuid import UUID
 
 import asyncpg
 from pypdf import PdfReader
-from pypdf.errors import FileNotDecryptedError, PdfReadError
+from pypdf.errors import FileNotDecryptedError, LimitReachedError, PdfReadError
 
 from app.attachment_sandbox import parse_attachment_sandboxed
 from app.attachments import AttachmentChunkInput, replace_attachment_chunks, upsert_attachment_state
@@ -295,6 +295,11 @@ def parse_pdf_attachment(
                 )
     except AttachmentProcessingError:
         raise
+    except LimitReachedError as exc:
+        raise AttachmentProcessingError(
+            status="unreadable",
+            error_code="pdf_processing_limit_exceeded",
+        ) from exc
     except FileNotDecryptedError as exc:
         raise AttachmentProcessingError(
             status="unreadable",
