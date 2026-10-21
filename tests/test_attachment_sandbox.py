@@ -202,6 +202,19 @@ def test_parser_timeout_configuration_rejects_non_finite_values(
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("timeout", [float("nan"), float("inf"), float("-inf"), 0.0, -1.0])
+async def test_sandbox_client_rejects_non_finite_or_non_positive_explicit_timeout(timeout: float) -> None:
+    with pytest.raises(ValueError, match="finite and greater than zero"):
+        await parse_attachment_sandboxed(
+            b"%PDF-1.4\n",
+            content_type="application/pdf",
+            max_bytes=50_000,
+            chunk_chars=256,
+            socket_path="unused",
+            timeout_seconds=timeout,
+        )
+
+
 @pytest.mark.parametrize(
     "raw",
     [

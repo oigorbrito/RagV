@@ -101,7 +101,9 @@ async def parse_attachment_sandboxed(
     from app.attachment_processing import AttachmentProcessingError
 
     path = socket_path or parser_socket_path()
-    timeout = timeout_seconds or parser_timeout_seconds()
+    timeout = parser_timeout_seconds() if timeout_seconds is None else float(timeout_seconds)
+    if not math.isfinite(timeout) or timeout <= 0:
+        raise ValueError("attachment parser timeout_seconds must be finite and greater than zero")
     request = {
         "version": PROTOCOL_VERSION,
         "content_type": content_type,
