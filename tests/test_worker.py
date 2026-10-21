@@ -340,13 +340,13 @@ async def test_summary_worker_completes_fence_before_reconcile(monkeypatch) -> N
 async def test_worker_redacts_nested_authorization_from_log_and_queue_failure(
     monkeypatch, caplog
 ) -> None:
-    secret = "SYNTH_WORKER_NESTED_AUTH_281"
+    sentinel = "SYNTH_WORKER_NESTED_AUTH_281"
     failed: list[str] = []
 
     async def leaking_handler(payload):
         raise RuntimeError(
             '{"error":{"headers":{"authorization":"OAuth '
-            f"{secret}"
+            f"{sentinel}"
             '"}},"status":503,"request_id":"nested-281"}'
         )
 
@@ -366,7 +366,7 @@ async def test_worker_redacts_nested_authorization_from_log_and_queue_failure(
     if len(failed) != 1:
         raise AssertionError("worker did not persist exactly one failure detail")
     for rendered in (failed[0], rendered_logs):
-        if secret in rendered:
+        if sentinel in rendered:
             raise AssertionError("nested Authorization credential reached an error sink")
         if (
             "[REDACTED]" not in rendered
