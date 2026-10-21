@@ -32,21 +32,48 @@ _SECRET_ENV_NAMES = (
 # Redact credentials embedded in URLs even when the full URL is not available in
 # environment variables (for example when emitted by a lower-level client).
 _URI_CREDENTIALS_RE = re.compile(r"(?P<scheme>[a-zA-Z][a-zA-Z0-9+.-]*://)(?P<user>[^\s/:@]*):(?P<secret>[^\s/@]+)@")
+_QUOTED_AUTHORIZATION_RE = re.compile(
+    r"""(?ix)
+    (?P<prefix>\bauthorization[\"']?\s*[:=]\s*)
+    (?P<quote>[\"'])
+    (?P<scheme>bearer|apikey|basic|token|digest|negotiate|oauth)
+    (?P<spacing>\s+)(?=\S)
+    (?:\\.|(?! (?P=quote) )[^\r\n}])+
+    (?P<closing_quote>(?P=quote)|(?=[}\]]|$))
+    """
+)
+_DIGEST_AUTHORIZATION_RE = re.compile(
+    r"""(?imx)
+    (\bauthorization[\"']?\s*[:=]\s*[\"']?\s*digest\s+)
+    (?=(?:username|realm|nonce|uri|response|algorithm|cnonce|opaque|qop|nc)\s*=)
+    [^\r\n]+
+    """
+)
 _AUTHORIZATION_RE = re.compile(
-    r"(?i)(authorization\s*[:=]\s*(?:bearer|apikey|basic|token|digest|negotiate|oauth)\s+)([^\s,;]+)"
+    r"""(?ix)
+    (\bauthorization[\"']?\s*[:=]\s*[\"']?\s*
+     (?:bearer|apikey|basic|token|digest|negotiate|oauth)\s+)
+    (\[REDACTED\][^\s,;}\"']*|[^\s,;}\"'\]]+)
+    """
 )
 _STRUCTURED_SECRET_RE = re.compile(
     r"""(?ix)
-    (?P<prefix>["']?(?:api[_-]?key|secret[_-]?key|private[_-]?key|access[_-]?key|app[_-]?key|auth[_-]?key|signing[_-]?key|encryption[_-]?key|client[_-]?secret|app[_-]?secret|auth[_-]?token|refresh[_-]?token|bearer[_-]?token|session[_-]?token|id[_-]?token|user[_-]?token|api[_-]?token|access[_-]?token|bearer|token|password|secret)["']?\s*[=:]\s*)
-    (?P<quote>["']?)
-    (?P<secret>[^"'\s,;&}\]]+)
-    (?P=quote)
+    (?P<prefix>["']?(?:api[_-]?key|secret[_-]?key|private[_-]?key|access[_-]?key|app[_-]?key|auth[_-]?key|signing[_-]?key|encryption[_-]?key|client[_-]?secret|app[_-]?secret|auth[_-]?token|refresh[_-]?token|bearer[_-]?token|session[_-]?token|id[_-]?token|user[_-]?token|api[_-]?token|access[_-]?token|webhook[_-]?(?:token|key|secret)|callback[_-]?(?:token|key|secret)|bearer|token|password|passcode|passwd|pwd|credential|credentials|secret)["']?\s*[=:]\s*)
+    (?P<quote>["'])?
+    (?P<secret>
+        (?(quote)
+            (?: \\. | (?! (?P=quote) ) [^\\\r\n] )+
+            |
+            (?: \[REDACTED\] [^"'\s,;&}\]]* | [^"'\s,;&}\]]+ )
+        )
+    )
+    (?(quote)(?P=quote))
     """
 )
 # Redact application/provider API keys even when not configured in env or when
 # appearing without authorization headers or query parameter names.
 _API_KEY_TOKEN_RE = re.compile(
-    r"\b(?:sk_(?:live|test)_[a-zA-Z0-9_-]+|sk-[a-zA-Z0-9_-]{12,}|eyJ[a-zA-Z0-9_-]+\.eyJ[a-zA-Z0-9_-]+\.[a-zA-Z0-9_-]+)\b"
+    r"\b(?:sk_(?:live|test)_[a-zA-Z0-9_-]+|sk-[a-zA-Z0-9_-]{12,}|rpy_[a-zA-Z0-9_-]{12,}|eyJ[a-zA-Z0-9_-]+\.eyJ[a-zA-Z0-9_-]+\.[a-zA-Z0-9_-]+)\b"
 )
 
 
@@ -87,13 +114,24 @@ def sanitize_error_message(value: object, *, max_chars: int = MAX_ERROR_MESSAGE_
         lambda match: f"{match.group('scheme')}{match.group('user')}:{REDACTED}@",
         text,
     )
+    text = _QUOTED_AUTHORIZATION_RE.sub(
+        lambda match: (
+            f"{match.group('prefix')}{match.group('quote')}"
+            f"{match.group('scheme')}{match.group('spacing')}"
+            f"{REDACTED}{match.group('closing_quote')}"
+        ),
+        text,
+    )
+    text = _DIGEST_AUTHORIZATION_RE.sub(
+        lambda match: f"{match.group(1)}{REDACTED}", text
+    )
     text = _AUTHORIZATION_RE.sub(
         lambda match: f"{match.group(1)}{REDACTED}", text
     )
     text = _STRUCTURED_SECRET_RE.sub(
         lambda match: (
-            f"{match.group('prefix')}{match.group('quote')}"
-            f"{REDACTED}{match.group('quote')}"
+            f"{match.group('prefix')}{match.group('quote') or ''}"
+            f"{REDACTED}{match.group('quote') or ''}"
         ),
         text,
     )

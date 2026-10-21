@@ -1,8 +1,8 @@
-# Rpy
+# RagV
 
-**Legal-process RAG backend built with FastAPI, PostgreSQL 16 and pgvector, with tenant isolation, durable job processing, provenance, and a provider-free confidential path.**
+**RagV is a legal-process research and summarization system built on a FastAPI backend, PostgreSQL 16 and pgvector, with tenant isolation, durable job processing, provenance, and a provider-free confidential path.**
 
-Rpy is deliberately presented first as a **backend system**, not as an LLM demo.
+RagV is deliberately presented first as a **reliable legal-process system**, not as an LLM demo.
 
 Its core engineering surface includes:
 
@@ -132,16 +132,16 @@ O host não precisa de Python, pytest nem chaves de providers para o smoke offli
 ### Windows
 
 ```powershell
-git clone https://github.com/oigorbrito/rpy.git
-cd rpy
+git clone https://github.com/oigorbrito/RagV.git
+cd RagV
 .\scripts\smoke_offline.ps1
 ```
 
 ### Linux/macOS
 
 ```bash
-git clone https://github.com/oigorbrito/rpy.git
-cd rpy
+git clone https://github.com/oigorbrito/RagV.git
+cd RagV
 ./scripts/smoke_offline.sh
 ```
 
@@ -344,4 +344,4 @@ requirements/  constraints reprodutíveis
 
 ## Licença e atribuições
 
-O Rpy é distribuído sob a licença MIT. Consulte `LICENSE` para os termos do projeto e `NOTICE` para provenance e atribuições de componentes/implementações de terceiros.
+O RagV é distribuído sob a licença MIT. Consulte `LICENSE` para os termos do projeto e `NOTICE` para provenance e atribuições de componentes/implementações de terceiros.
