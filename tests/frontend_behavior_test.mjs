@@ -377,6 +377,30 @@ await scenario("successful lookup renders public data, focuses result and uses b
   assert.equal(ui.elements["result"].scrolled, true);
 });
 
+await scenario("published iaSummary string is rendered and copied as readable text", async () => {
+  const markdown = [
+    "# Resumo do processo",
+    "## Síntese",
+    "A audiência foi designada para 03/03/2027.",
+    "## Movimentações",
+    "- Em 01/09/2026, audiência designada para 03/03/2027.",
+  ].join("\n");
+  const ui = createHarness([
+    jsonResponse(200, { classification: "read_existing", process_exists: true }),
+    jsonResponse(200, readyPayload({ summary: null, iaSummary: markdown })),
+  ]);
+
+  await ui.search();
+  await ui.click("open-existing-history");
+
+  assert.ok(ui.elements["summary-body"].renderedText.includes("A audiência foi designada"));
+  assert.equal(ui.elements["copy-summary"].hidden, false);
+  await ui.click("copy-summary");
+  assert.ok(ui.clipboard().includes("Resumo do processo"));
+  assert.ok(ui.clipboard().includes("- Em 01/09/2026, audiência designada para 03/03/2027."));
+  assert.doesNotMatch(ui.clipboard(), /<ProcessHeader|<Party/);
+});
+
 await scenario("provider-free demo summary is labeled as synthetic instead of AI-generated", async () => {
   const ui = createHarness([
     jsonResponse(200, { classification: "read_existing", process_exists: true }),

@@ -517,7 +517,12 @@ function renderProcess(data) {
 
   const body = document.querySelector('#summary-body'),
     provenance = document.querySelector('#summary-provenance');
-  currentSummary = data.summary?.markdown || '';
+  // The legacy process endpoint returns `summary.markdown`; summary-job and
+  // public v1 responses expose the same JSX document as `iaSummary`.
+  // Accept only the rendered string here (the JSON format is not Markdown).
+  currentSummary = typeof data.summary?.markdown === 'string'
+    ? data.summary.markdown
+    : typeof data.iaSummary === 'string' ? data.iaSummary : '';
   copyButton.hidden = !currentSummary;
   summaryEyebrow.hidden = !currentSummary;
   const demoSummary = data.summary?.model === 'local-demo-no-provider';
