@@ -23,6 +23,20 @@ function Get-OfficialDataJudApiKey {
     return $match.Groups[1].Value.Trim()
 }
 
+function Save-DataJudConfiguration([string]$Key, [bool]$AuthorizedUse) {
+    if (-not $AuthorizedUse) { throw 'Confirme o uso autorizado antes de ativar.' }
+    $key = $Key.Trim() -replace '^APIKey\s+', ''
+    if ($key -notmatch '^[A-Za-z0-9_+/=:-]{16,2048}$') { throw 'Chave vazia ou formato inválido. Confira a fonte oficial do CNJ.' }
+    if (-not (Test-Path -LiteralPath $script:HmlEnv)) { throw 'Perfil de homologação ausente.' }
+    $lines = @(Get-Content -LiteralPath $script:HmlEnv -Encoding UTF8)
+    $new = @($lines | Where-Object { $_ -notmatch '^DATAJUD_(API_KEY|ENABLED|AUTHORIZED_USE)=' })
+    $new += @('DATAJUD_ENABLED=true','DATAJUD_AUTHORIZED_USE=true',"DATAJUD_API_KEY=$key")
+    $tmp = "$($script:HmlEnv).new"
+    $new | Set-Content -LiteralPath $tmp -Encoding ASCII
+    Set-HmlPrivatePath $tmp
+    Move-Item -LiteralPath $tmp -Destination $script:HmlEnv -Force
+}
+
 function Wait-DataJudCapabilities([hashtable]$Settings) {
     $url = "http://127.0.0.1:$($Settings.RPY_API_PORT)/capabilities"
     $lastReason = 'o backend não confirmou o DataJud'
@@ -55,12 +69,14 @@ try {
     $link.Add_LinkClicked({ Start-Process $script:DataJudOfficialUrl })
     $form.Controls.Add($link)
     $label = New-Object Windows.Forms.Label
-    $label.Text = 'Cole a chave vigente. Nenhuma consulta será enviada pela configuração.'
+    $label.Text = 'Reaplique a chave persistida ou obtenha outra. Nenhuma consulta será enviada.'
     $label.SetBounds(20,60,580,35)
     $form.Controls.Add($label)
     $keyBox = New-Object Windows.Forms.TextBox
     $keyBox.UseSystemPasswordChar = $true
     $keyBox.ReadOnly = $true
+    # Reapply the existing credential; fetching a replacement is optional.
+    $keyBox.Text = [string]$settings.DATAJUD_API_KEY
     $keyBox.SetBounds(20,100,430,26)
     $form.Controls.Add($keyBox)
     $fetch = New-Object Windows.Forms.Button
@@ -74,12 +90,12 @@ try {
             $keyBox.Text = Get-OfficialDataJudApiKey
             $status.Text = 'Chave vigente obtida. Confirme o uso autorizado para ativar.'
         } catch {
-            $keyBox.Clear()
-            $status.Text = $_.Exception.Message
+            $status.Text = 'Não foi possível obter outra chave. A configuração persistida foi preservada.'
         } finally { $fetch.Enabled = $true }
     })
     $optin = New-Object Windows.Forms.CheckBox
     $optin.Text = 'Confirmo finalidade e uso autorizados pelas regras vigentes do CNJ.'
+    $optin.Checked = $settings.DATAJUD_AUTHORIZED_USE -eq 'true'
     $optin.SetBounds(20,145,580,35)
     $form.Controls.Add($optin)
     $status = New-Object Windows.Forms.Label
@@ -91,18 +107,8 @@ try {
     $form.Controls.Add($save)
     $save.Add_Click({
         try {
-            if (-not $optin.Checked) { throw 'Confirme o uso autorizado antes de ativar.' }
-            $key = $keyBox.Text.Trim() -replace '^APIKey\s+', ''
-            if ($key -notmatch '^[A-Za-z0-9_+/=:-]{16,2048}$') { throw 'Chave vazia ou formato inválido. Confira a fonte oficial do CNJ.' }
             $save.Enabled = $false
-            $lines = @(Get-Content -LiteralPath $script:HmlEnv -Encoding UTF8)
-            $new = @($lines | Where-Object { $_ -notmatch '^DATAJUD_(API_KEY|ENABLED|AUTHORIZED_USE)=' })
-            $new += @('DATAJUD_ENABLED=true','DATAJUD_AUTHORIZED_USE=true',"DATAJUD_API_KEY=$key")
-            $tmp = "$($script:HmlEnv).new"
-            $new | Set-Content -LiteralPath $tmp -Encoding ASCII
-            Set-HmlPrivatePath $tmp
-            Move-Item -LiteralPath $tmp -Destination $script:HmlEnv -Force
-            $key = $null
+            Save-DataJudConfiguration -Key $keyBox.Text -AuthorizedUse $optin.Checked
             $keyBox.Clear()
             $script:HmlStatusLabel = $status
             $compose = Get-HmlComposeArgs $settings

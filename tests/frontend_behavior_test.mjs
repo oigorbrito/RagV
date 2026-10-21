@@ -25,7 +25,7 @@ const ids = [
   "confirm-refresh-cancel","refresh-from-result",
   "verify-token","auth-status","source-judit","source-datajud","datajud-status-hint",
   "judit-info","judit-info-wrap","judit-tooltip","datajud-info","datajud-info-wrap","datajud-tooltip",
-  "api-connectivity","api-connectivity-label",
+  "api-connectivity","api-connectivity-label","runtime-environment","datajud-configure",
 ];
 
 class ClassList {
@@ -163,7 +163,7 @@ function readyPayload(overrides = {}) {
   };
 }
 
-function createHarness(fetchResponses, { apiBase = "same-origin", hasExplicitCapabilities = false, now = FIXED_NOW } = {}) {
+function createHarness(fetchResponses, { apiBase = "same-origin", hasExplicitCapabilities = false, now = FIXED_NOW, desktopApi = null } = {}) {
   const elements = Object.fromEntries(ids.map(id => [id, new Element(id)]));
   const requests = [];
   const capabilitiesRequests = [];
@@ -219,6 +219,7 @@ function createHarness(fetchResponses, { apiBase = "same-origin", hasExplicitCap
       },
     },
     window: {
+      pywebview: desktopApi ? { api: desktopApi } : undefined,
       RPY_PUBLIC_CONFIG: { apiBase },
       crypto: { randomUUID: () => "7ddcc476-3c58-4c90-864a-0eacac9fd8b3" },
       location: { origin: "http://localhost" },
@@ -328,6 +329,68 @@ async function renderHistoryItem(updatedAt, now = FIXED_NOW) {
   await ui.click("history-trigger");
   return ui;
 }
+
+await scenario("DataJud waits for configuration completion before refreshing capabilities", async () => {
+  let finish;
+  let calls = 0;
+  const completion = new Promise(resolve => { finish = resolve; });
+  const ui = createHarness([
+    jsonResponse(200, { environment: "homologation", sources: { datajud: { enabled: false, reason_unavailable: "Ativação pendente" } } }),
+    jsonResponse(200, { environment: "homologation", sources: { datajud: { enabled: true } } }),
+  ], { hasExplicitCapabilities: true, desktopApi: {
+    open_datajud_configurator: () => { calls += 1; return completion; },
+  } });
+  await new Promise(resolve => setImmediate(resolve));
+  const opening = ui.click("datajud-configure");
+  assert.equal(ui.requests.length, 1);
+  assert.equal(ui.elements["datajud-configure"].disabled, true);
+  await ui.click("datajud-configure");
+  assert.equal(calls, 1);
+  finish({ ok: true });
+  await opening;
+  assert.equal(ui.requests.length, 2);
+  assert.equal(ui.elements["source-datajud"].disabled, false);
+  assert.equal(ui.elements["datajud-configure"].disabled, false);
+  assert.equal(ui.elements["datajud-configure"].hidden, true);
+  assert.equal(ui.hasTimer(), false);
+});
+
+await scenario("configuration failure or cancellation never enables DataJud artificially", async () => {
+  for (const result of [{ ok: false, message: "Configuração não concluída" }, { ok: true }]) {
+    const ui = createHarness([
+      jsonResponse(200, { sources: { datajud: { enabled: false, reason_unavailable: "Uso não autorizado" } } }),
+    ], { hasExplicitCapabilities: true, desktopApi: {
+      open_datajud_configurator: async () => result,
+    } });
+    await new Promise(resolve => setImmediate(resolve));
+    await ui.click("datajud-configure");
+    assert.equal(ui.elements["source-datajud"].disabled, true);
+    assert.equal(ui.elements["datajud-configure"].disabled, false);
+    assert.equal(ui.requests.length, result.ok ? 2 : 1);
+    assert.equal(ui.elements["datajud-status-hint"].textContent, result.ok ? "Uso não autorizado" : "Configuração não concluída");
+  }
+});
+
+await scenario("independent backend never redirects configuration to another profile", async () => {
+  const ui = createHarness([]);
+  await new Promise(resolve => setImmediate(resolve));
+  await ui.click("datajud-configure");
+  assert.match(ui.elements["datajud-status-hint"].textContent, /Configure apenas o ambiente indicado/);
+  assert.equal(ui.requests.length, 0);
+});
+
+await scenario("active environment and backend origin are visible without credentials", async () => {
+  for (const [environment, label] of [["homologation", "Homologação"], ["standalone", "Instância independente"], [undefined, "não identificado"]]) {
+    const ui = createHarness([jsonResponse(200, {
+      environment, sources: { datajud: { enabled: false, reason_unavailable: "Uso não autorizado" } },
+    })], { hasExplicitCapabilities: true, apiBase: "http://127.0.0.1:62427" });
+    await new Promise(resolve => setImmediate(resolve));
+    assert.ok(ui.elements["runtime-environment"].textContent.includes(label), ui.elements["runtime-environment"].textContent);
+    assert.ok(ui.elements["runtime-environment"].textContent.includes("http://127.0.0.1:62427"));
+    assert.equal(ui.elements["datajud-status-hint"].textContent, "Uso não autorizado");
+    assert.ok(!ui.elements["runtime-environment"].textContent.includes(TOKEN));
+  }
+});
 
 await scenario("configured Pages API base uses the backend origin", async () => {
   const ui = createHarness(

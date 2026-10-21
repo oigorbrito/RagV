@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 from typing import Any
 from uuid import UUID
 
@@ -939,6 +940,12 @@ async def v1_get_capabilities(request: Request) -> dict[str, Any]:
         "authenticated": authenticated,
         "tenant_id": tenant_id,
         "default_source": "judit",
+        "environment": (
+            "homologation"
+            if os.environ.get("RPY_HOMOLOGATION_MODE", "").lower() == "true"
+            and os.environ.get("RPY_HOMOLOGATION_BIND_ADDRESS") == "127.0.0.1"
+            else "standalone"
+        ),
         "sources": {
             "judit": {
                 "name": "Judit",

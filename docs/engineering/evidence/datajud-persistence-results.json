@@ -1,0 +1,162 @@
+{
+  "gate": "DATAJUD_PERSISTENCE_E2E_BLOCKED",
+  "observed_at_utc": "2026-10-20T14:50:55.663221+00:00",
+  "initial_user_checkout_sha": "cf8e69af7a02bfdf8d685c9128d6926f5425731e",
+  "isolated_base_sha": "0d2184f53315ced96953624b58afddfd9ef2d5e8",
+  "implementation_sha": "f0a2835b077f1a225cbac504186692ed154c8211",
+  "pr_url": "https://github.com/oigorbrito/RagV/pull/518",
+  "followup_validation_sha": "ab94176eedb13bbac1979fddbf8ca66d9c9ffebc",
+  "followup_validation": "97 targeted, 49 DOM, synthetic Chromium, Ruff, harness and diff-check passed locally at this exact head; PowerShell fixture now also isolates LOCALAPPDATA on Linux CI hosts",
+  "scope": "Candidate not deployed; existing installed environment inspected read-only. No real-provider query.",
+  "environment": {
+    "host": "Windows-11-10.0.26300-SP0",
+    "python": "3.12.10",
+    "node": "26.10.0",
+    "powershell": "7.6.7",
+    "pytest": "9.0.3",
+    "postgres": "16.15",
+    "pgvector": "0.8.6",
+    "database_encoding": "UTF8",
+    "postgres_image": "sha256:ccc6e83d6e35e931dc7c5def2022729d5a6c370318d099181995567ff1fb4d6b"
+  },
+  "file_sha256": {
+    "app/api.py": "cf68113ac28142c4ea7b5e1d2d34094fec5ab5e131adc79f0cd388f8b4132713",
+    "app/api_v1.py": "fd1724be3ce4a7d800c7201885391403f2ab90df4b354fef8209389faea6dae9",
+    "app/frontend/app.js": "92d77309fbe244bd8ee30cba8009ca264ffcd6a1f26fcbd1dcd32f7ed7ae5de8",
+    "app/frontend/index.html": "78d95ca77994db2b84be6f35922440c0dad17a25084d04af2a21b0fa7bba44a5",
+    "packaging/windows/configurar-datajud.ps1": "6f2ad5ac49bb01f34857fe5195fc11e07693f4b5b01257cfc5271ffaab7f87b8",
+    "packaging/windows/homologacao-common.ps1": "9c2ee288da6f21b85a2048e24b61d35e02c10526737785176a55d97f490e0926",
+    "packaging/windows/start-homologacao.ps1": "cd6d51eab98d6dc311079b1c47539f57d704f0ac31cbbd97a47255cfeacaa6b0",
+    "scripts/ragv_desktop.py": "c8030032ae076df4ed1a6ef19dffbe2453c43d869eddfbc60195675014c5f0a3",
+    "tests/datajud_persistence_contract.ps1": "3ce0038cea778f92d175bc89dd21491970bad1066b8bec6e97911d4e150f3393",
+    "tests/frontend_behavior_test.mjs": "11379acc834bee173ae31bdf811b49db23475d0f47b5e3ec251c1043ac99fdd6",
+    "tests/test_datajud_api.py": "503ee56d747340fcd40ba94714a51013c5ca05b67f3c2f7f403682dbf1c29169",
+    "tests/test_datajud_persistence_windows.py": "01ba1afa6746f6a42947c5a697060470bd330d28474beaa37e0ca282f913e302",
+    "tests/test_ragv_desktop.py": "cdae5cc467230a84de09d1ee75ae326dd4987bc416d7b9526d9e540a3bf6dd5b"
+  },
+  "checks": [
+    {
+      "command": "PYTHONPATH=. python -m pytest -q tests/test_auth.py tests/test_datajud_persistence_windows.py tests/test_ragv_desktop.py tests/test_datajud_api.py tests/test_datajud_client.py tests/test_windows_homologation.py tests/test_windows_update_contract.py tests/test_regression_contracts.py tests/test_local_compose_contract.py --tb=short",
+      "log": "staging_evidence_datajud_persistence/targeted-committed.txt",
+      "exit_code": 0,
+      "interpretation": "97 passed; synthetic PowerShell lifecycle and real Compose rendering",
+      "stdout_sha256": "08fe511553b68673a0dc2007651ee81b5a67a4c3f0dc564c9c37707009d7af35"
+    },
+    {
+      "command": "node tests/frontend_behavior_test.mjs",
+      "log": "staging_evidence_datajud_persistence/frontend-tests-final.txt",
+      "exit_code": 0,
+      "interpretation": "49 synthetic scenarios passed",
+      "stdout_sha256": "8425013226b1c0d8e18cc31eddc997d9b437d995717b181c1f05578b3db3626a"
+    },
+    {
+      "command": "PYTHONPATH=. python tests/frontend_browser_smoke.py",
+      "log": "staging_evidence_datajud_persistence/browser-smoke.txt",
+      "exit_code": 0,
+      "interpretation": "Chromium with synthetic local API, not installed WebView2",
+      "stdout_sha256": "e1db7497d200c37737b5ca2ae224c23da789ad89759611be36ad33d73bc031d9"
+    },
+    {
+      "command": "TEST_DATABASE_URL=<disposable-UTF8-PostgreSQL> PYTHONPATH=. python -m pytest -q tests/integration/test_datajud_jobs_postgres.py tests/integration/test_datajud_pipeline_postgres.py tests/integration/test_datajud_provenance_postgres.py --tb=short",
+      "log": "staging_evidence_datajud_persistence/postgres-tests-utf8.txt",
+      "exit_code": 0,
+      "interpretation": "14 passed; real PostgreSQL, synthetic provider; precommit working tree with identical application bytes",
+      "stdout_sha256": "da418660eb5593f37760d42c63f88998c91cbf31610511d3c12603d6a438230a"
+    },
+    {
+      "command": "PYTHONPATH=. python -m pytest -q tests --ignore=tests/integration --hypothesis-seed=20260918 --tb=line",
+      "log": "staging_evidence_datajud_persistence/unit-suite.txt",
+      "exit_code": 1,
+      "interpretation": "12 existing Windows Unix-socket/POSIX failures; 1165 passed, 1 skipped; not green",
+      "stdout_sha256": "e6be26ea727757dc1244afa88c135b1d73098d04d04bcd5796b24b8e2e72e91b"
+    },
+    {
+      "command": "python -m ruff check app scripts tests",
+      "log": "staging_evidence_datajud_persistence/ruff.txt",
+      "exit_code": 0,
+      "interpretation": "pass",
+      "stdout_sha256": "82b3e6a6c090a57601d22943bd23fca9218d1031dbe5a7b754092f9a156b4f18"
+    },
+    {
+      "command": "python scripts/project_harness.py",
+      "log": "staging_evidence_datajud_persistence/harness.txt",
+      "exit_code": 0,
+      "interpretation": "26 guardrail/wiring observations; not all wired checks executed",
+      "stdout_sha256": "80cba69f8b807d21b5922440ff27f08569b25bcadd39fa6ded352161a537771e"
+    },
+    {
+      "command": "git diff --check",
+      "log": "staging_evidence_datajud_persistence/diff-check.txt",
+      "exit_code": 0,
+      "interpretation": "pass",
+      "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  ],
+  "preservation": {
+    "profiles": true,
+    "services": true,
+    "capabilities": true
+  },
+  "installed_observations": {
+    "development": {
+      "project": "ragv",
+      "origin": "http://127.0.0.1:8000",
+      "enabled": false,
+      "key_persisted": false
+    },
+    "homologation": {
+      "project": "ragv-hml-76460759f1c0",
+      "origin": "http://127.0.0.1:62427",
+      "enabled": true,
+      "authorized_use": true,
+      "key_persisted": true,
+      "worker_keys_match_profile": true,
+      "api_key_absent": true,
+      "scheduler_key_absent": true
+    },
+    "legacy_project": {
+      "project": "ragv-hml-9eff27d2c68d",
+      "origin": "http://127.0.0.1:18080",
+      "enabled": false,
+      "selected_by_current_profile": false
+    }
+  },
+  "blocked": {
+    "provider_acceptance": "No specific authorized CNJ supplied; no external process lookup executed",
+    "container_lifecycle": "New network-none disposable container start exceeded 20 seconds; installed functional services were not restarted",
+    "candidate_install": "No rebuilt/signed installer or installed candidate WebView2 acceptance",
+    "remote_ci": {
+      "observed_head": "ab94176eedb13bbac1979fddbf8ca66d9c9ffebc",
+      "run_id": 39443203801,
+      "check_run_id": 118698189103,
+      "conclusion": "failure",
+      "steps": [],
+      "annotation": "The job was not started because recent account payments have failed or your spending limit needs to be increased. Please check the 'Billing & plans' section in your settings",
+      "scope": "Execution blocked, not a test failure or approval; no billing/protection/check changes made"
+    }
+  },
+  "earlier_attempts": {
+    "postgres-tests.txt": "12 passed/2 failed because first disposable database used SQL_ASCII; recreated separate UTF8 database without changing application/fixtures"
+  },
+  "local_artifact_sha256": {
+    "browser-smoke.txt": "e1db7497d200c37737b5ca2ae224c23da789ad89759611be36ad33d73bc031d9",
+    "check_no_secrets.py": "fa97621f801fde0c72c4f9d7c22c61a302a54df3fb3350cfbdef3ffe523399e4",
+    "diff-check.txt": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "frontend-before.txt": "a6628e8211dd11701617691234878c4ced70ead6fbadffbcf4de8a52bde87aaa",
+    "frontend-tests-final.txt": "8425013226b1c0d8e18cc31eddc997d9b437d995717b181c1f05578b3db3626a",
+    "frontend-tests.txt": "540bf6ecea0fd6b1671220c41b20c5dbccbdbc3f82db5337937d47fad6e47058",
+    "harness.txt": "80cba69f8b807d21b5922440ff27f08569b25bcadd39fa6ded352161a537771e",
+    "inspect_local.py": "552ee8a804ac4907fda2c1c67a9e967019dba61fedf32db0c2be5007989e9429",
+    "local-after.json": "8843d05865c19623eb6eaa6069556e2b0c15a2bb3470bebfb07fa2b97413b7a8",
+    "local-before.json": "8843d05865c19623eb6eaa6069556e2b0c15a2bb3470bebfb07fa2b97413b7a8",
+    "postgres-tests-utf8.txt": "da418660eb5593f37760d42c63f88998c91cbf31610511d3c12603d6a438230a",
+    "postgres-tests.txt": "a2c36d8eec061ae6813bf0720fe99e99be6a37eaf6dca5c0b6b43e9937ebf218",
+    "record_results.py": "119b31edeeca61f65e9757981699fc177221bc301e04a9abee68830f439e9127",
+    "ruff.txt": "82b3e6a6c090a57601d22943bd23fca9218d1031dbe5a7b754092f9a156b4f18",
+    "run_postgres_tests.py": "25d49a4f8319054c17df2a146cb4962cdce55fad7706ef534b9364cea99a26b4",
+    "targeted-committed.txt": "08fe511553b68673a0dc2007651ee81b5a67a4c3f0dc564c9c37707009d7af35",
+    "targeted-tests-final.txt": "bb1f8da902444e49f55a585b20a3d579ecea53383ea5c56561f1f6eeefed03a7",
+    "targeted-tests.txt": "fcf2361f7843e85b84b7951ccc507a2df069fcca4f06095d5a1f154e7d2b608d",
+    "unit-suite.txt": "e6be26ea727757dc1244afa88c135b1d73098d04d04bcd5796b24b8e2e72e91b"
+  }
+}
