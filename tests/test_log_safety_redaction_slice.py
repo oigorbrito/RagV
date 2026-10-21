@@ -20,6 +20,9 @@ CASES = [
     ('callback-key=SYNTHETIC_CALLBACK_250; status=failed', ['SYNTHETIC_CALLBACK_250'], ['status=failed']),
     ('CALLBACK_SECRET=SYNTHETIC_CALLBACK_250, code=E123', ['SYNTHETIC_CALLBACK_250'], ['code=E123']),
     ('error credential=SYNTHETIC_CRED_250 status=403', ['SYNTHETIC_CRED_250'], ['status=403']),
+    ('passcode=SYNTHETIC_PASSCODE_273 status=401 request_id=fixture-273', ['SYNTHETIC_PASSCODE_273'], ['status=401', 'request_id=fixture-273']),
+    ('{"passcode":"SYNTHETIC_JSON_PASSCODE_273","status":"retry"}', ['SYNTHETIC_JSON_PASSCODE_273'], ['"status":"retry"']),
+    ('{"error":{"details":[{"passcode":"SYNTHETIC_NESTED_PASSCODE_276","callback-key":"SYNTHETIC_NESTED_CALLBACK_276","status":403}]},"request_id":"fixture-276"}', ['SYNTHETIC_NESTED_PASSCODE_276', 'SYNTHETIC_NESTED_CALLBACK_276'], ['"status":403', '"request_id":"fixture-276"']),
     ('passwd=SYNTHETIC_PASS_250 pwd=SYNTHETIC_PWD_250 credentials=SYNTHETIC_CREDS_250', ['SYNTHETIC_PASS_250', 'SYNTHETIC_PWD_250', 'SYNTHETIC_CREDS_250'], ['passwd=', 'pwd=', 'credentials=']),
     ('rpy_SYNTHETIC_TOKEN_250 request_id=abc rpy_SYNTHETIC_TOKEN_250', ['rpy_SYNTHETIC_TOKEN_250'], ['request_id=abc']),
     ('callback_key=***SYNTHETIC_VISIBLE_250 code=E123', ['SYNTHETIC_VISIBLE_250'], ['code=E123']),
@@ -44,6 +47,8 @@ def test_sensitive_values_removed_diagnostics_retained(value, secrets, preserve)
 @pytest.mark.parametrize('value', [
     'GET /health status=503 request_id=abc host=db.test duration_ms=12',
     'credential_count=0 token_count=7 callback_key_count=2 password_policy=enabled',
+    'key=sort pass=passed passcode_count=0 passcode_policy=enabled status=503 request_id=fixture-273',
+    'A passcode is required; keep the public diagnostic text intact.',
     'The credential is unavailable; callback status failed; connection timed out.',
     'cwd=/srv/ragv result_count=0 code=ECONNREFUSED',
     'public_key_identifier=fixture-01 webhook_attempt=3 callback_status=retry',
@@ -52,14 +57,14 @@ def test_non_sensitive_diagnostics_unchanged(value):
     if sanitize_error_message(value) != value:
         raise AssertionError("Non-sensitive diagnostic text changed")
 
-@pytest.mark.parametrize('key', ['pwd', 'passwd', 'credential', 'credentials', 'webhook_key', 'callback-key'])
+@pytest.mark.parametrize('key', ['pwd', 'passwd', 'passcode', 'credential', 'credentials', 'webhook_key', 'callback-key'])
 def test_already_masked_values_remain_stable(key):
     value = f'{key}={REDACTED} status=403'
     if sanitize_error_message(value) != value:
         raise AssertionError("Previously masked credential marker changed")
 
 @settings(max_examples=160, deadline=None, derandomize=True)
-@given(key=st.sampled_from(['pwd', 'passwd', 'credential', 'credentials', 'webhook_key', 'callback_key', 'callback_token', 'webhook_secret']), quote=st.sampled_from(['', '"', "'"]), secret=st.text(alphabet='abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_-', min_size=12, max_size=48))
+@given(key=st.sampled_from(['pwd', 'passwd', 'passcode', 'credential', 'credentials', 'webhook_key', 'callback_key', 'callback_token', 'webhook_secret']), quote=st.sampled_from(['', '"', "'"]), secret=st.text(alphabet='abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_-', min_size=12, max_size=48))
 def test_generated_keys_and_token_values(key, quote, secret):
     text = f'{key}={quote}{secret}{quote} request_id=abc status=500'
     rendered = sanitize_error_message(text)
