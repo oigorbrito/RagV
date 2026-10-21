@@ -171,6 +171,105 @@ def test_sanitize_error_message_redacts_authorization_schemes(scheme: str) -> No
     assert f"Authorization: {scheme} {REDACTED}" in rendered
 
 
+@pytest.mark.parametrize("scheme", ["Bearer", "APIKey", "Basic", "Token", "Digest", "Negotiate", "OAuth"])
+def test_sanitize_error_message_redacts_nested_authorization_headers(scheme: str) -> None:
+    secret = f"SYNTH_NESTED_AUTH_{scheme}_281"
+    message = (
+        '{"error":{"headers":{"Authorization":"'
+        f"{scheme} {secret}"
+        '"}},"status":502,"request_id":"fixture-281"}'
+    )
+
+    rendered = sanitize_error_message(message)
+
+    if secret in rendered:
+        raise AssertionError("nested Authorization credential was not redacted")
+    for diagnostic in (
+        '"headers":{"Authorization":',
+        REDACTED,
+        '"status":502',
+        '"request_id":"fixture-281"',
+    ):
+        if diagnostic not in rendered:
+            raise AssertionError(f"sanitizer lost expected diagnostic: {diagnostic}")
+
+
+@pytest.mark.parametrize(
+    "message",
+    [
+        '{"Authorization":"Basic"}',
+        'Authorization: Basic',
+        '{"Authorization":"UnknownScheme benign"}',
+        'Authorization: Bearerless benign-text',
+        'The word Basic authentication succeeded; status=200 request_id=fixture',
+    ],
+)
+def test_sanitize_error_message_preserves_noncredential_authorization_text(message: str) -> None:
+    if sanitize_error_message(message) != message:
+        raise AssertionError("noncredential Authorization text changed")
+
+
+def test_sanitize_error_message_redacts_quoted_authorization_value() -> None:
+    rendered = sanitize_error_message('Authorization: "OAuth SYNTH_QUOTED_AUTH_281"')
+
+    expected = f'Authorization: "OAuth {REDACTED}"'
+    if "SYNTH_QUOTED_AUTH_281" in rendered or rendered != expected:
+        raise AssertionError("quoted Authorization value was not safely redacted")
+
+
+def test_sanitize_error_message_redacts_quoted_digest_directives() -> None:
+    import json
+
+    message = (
+        '{"error":{"headers":{"Authorization":"Digest username=\\"alice\\", '
+        'realm=\\"sample\\", response=\\"SYNTH_DIGEST_RESPONSE_281\\", '
+        'qop=auth, nc=00000001, cnonce=\\"SYNTH_DIGEST_CNONCE_281\\""}},'
+        '"status":401,"request_id":"fixture-digest"}'
+    )
+    rendered = sanitize_error_message(message)
+
+    try:
+        parsed = json.loads(rendered)
+    except json.JSONDecodeError as exc:
+        raise AssertionError("redacted nested Authorization value is not valid JSON") from exc
+    if "SYNTH_DIGEST_RESPONSE_281" in rendered or "SYNTH_DIGEST_CNONCE_281" in rendered:
+        raise AssertionError("quoted Digest credential directives were not redacted")
+    if parsed["status"] != 401 or parsed["request_id"] != "fixture-digest":
+        raise AssertionError("sanitizer lost public diagnostics")
+    if parsed["error"]["headers"]["Authorization"] != f"Digest {REDACTED}":
+        raise AssertionError("Digest header was not replaced as one credential value")
+
+
+def test_sanitize_error_message_redacts_raw_digest_line_only() -> None:
+    message = (
+        'Authorization: Digest username="alice", response="SYNTH_RAW_DIGEST_281", qop=auth\n'
+        "status=401 request_id=fixture-raw-digest"
+    )
+    rendered = sanitize_error_message(message)
+    expected = f"Authorization: Digest {REDACTED}\nstatus=401 request_id=fixture-raw-digest"
+
+    if "SYNTH_RAW_DIGEST_281" in rendered or rendered != expected:
+        raise AssertionError("raw Digest line leaked credentials or lost following diagnostics")
+
+
+def test_sanitize_error_message_handles_case_and_malformed_authorization_headers() -> None:
+    message = '{"headers":{"aUtHoRiZaTiOn":"bAsIc SYNTH_CASE_AUTH_281"}}'
+    rendered = sanitize_error_message(message)
+    if "SYNTH_CASE_AUTH_281" in rendered:
+        raise AssertionError("case-insensitive nested Authorization value was not redacted")
+
+    malformed = '{"Authorization":"Bearer SYNTH_UNCLOSED_AUTH_281}'
+    rendered_malformed = sanitize_error_message(malformed)
+    if "SYNTH_UNCLOSED_AUTH_281" in rendered_malformed:
+        raise AssertionError("malformed nested Authorization value retained a credential")
+
+
+def test_sanitize_error_message_preserves_already_redacted_authorization() -> None:
+    message = '{"Authorization":"Bearer [REDACTED]"}'
+    if sanitize_error_message(message) != message:
+        raise AssertionError("sanitizing an existing marker changed the value")
+
+
 _CREDENTIAL_ALPHABET = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_-"
 
 

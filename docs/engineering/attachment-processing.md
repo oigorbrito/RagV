@@ -185,6 +185,8 @@ Rpy now has a provider-boundary primitive for the documented Judit lawsuit attac
 
 This boundary is intentionally **not** wired to automatic acquisition yet. `with_attachments` remains `false` in lawsuit requests, so this change cannot introduce attachment charges or alter release behavior by itself. Automatic acquisition still requires an explicit rollout that parses Judit attachment metadata, preserves the secret/private-document boundary, sequences download/processing before summary publication where required, and proves the flow with synthetic integration coverage.
 
+The authenticated attachment download rejects HTTP redirects before issuing another request. This is deliberate: automatic redirect handling could forward the Judit `api-key` to a destination outside the fixed provider endpoint.
+
 Current Judit materials agree on `with_attachments: true`, attachment ids and CNJ/instance addressing, but currently expose more than one download/authentication shape. Automatic acquisition therefore remains gated until one deployment-authoritative contract is selected and tested. Provider availability, commercial authorization and private-document credentials remain deployment concerns rather than assumptions in code.
 
 ## Controlled Judit acquisition

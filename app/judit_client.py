@@ -296,6 +296,17 @@ def _attachment_content_type(response: Any) -> str:
     return normalized or "application/octet-stream"
 
 
+class _RejectAttachmentRedirect(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        return None
+
+
+def _open_attachment_response(request: urllib.request.Request, *, timeout: float):
+    """Do not forward the authenticated attachment request to a redirect target."""
+    opener = urllib.request.build_opener(_RejectAttachmentRedirect())
+    return opener.open(request, timeout=timeout)
+
+
 def _download_attachment_sync(
     code: str,
     instance: str | int,
@@ -327,7 +338,7 @@ def _download_attachment_sync(
     )
     max_bytes = _attachment_max_bytes()
     try:
-        with urllib.request.urlopen(request, timeout=_timeout_seconds()) as response:
+        with _open_attachment_response(request, timeout=_timeout_seconds()) as response:
             if response.status != 200:
                 raise JuditRequestError(
                     f"Judit attachment download failed with HTTP {response.status}"
