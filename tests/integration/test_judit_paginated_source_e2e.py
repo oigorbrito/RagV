@@ -8,6 +8,8 @@ import httpx
 import pytest
 
 import app.rag as rag
+from app.claim_evidence import build_material_claims
+from app.summary_output import structured_summary_document
 from app.api import app
 from app.db import create_pool
 from app.migrations import migrate
@@ -18,6 +20,26 @@ pytestmark = pytest.mark.skipif(
     not TEST_DATABASE_URL,
     reason="TEST_DATABASE_URL is required for PostgreSQL integration tests",
 )
+
+
+def _prime_fake_structured_summary(context: dict) -> None:
+    payload = {
+        "synthesis": "Síntese factual de teste.",
+        "timeline": [],
+        "current_status": "Situação atual registrada nos autos.",
+        "attention": list(context.get("source_warnings", []))
+        or ["Nenhuma divergência objetiva identificada."],
+        "decisions": [],
+        "deadlines": [],
+        "related_processes": [],
+        "attachments": [],
+    }
+    payload["claims"] = build_material_claims(
+        payload,
+        evidence_refs=[str(context["_process_evidence_ref"])],
+    )
+    context["_parsed_summary"] = payload
+    context["_structured_summary"] = structured_summary_document(payload, context)
 
 
 @pytest.mark.asyncio
@@ -51,14 +73,18 @@ async def test_paginated_request_uses_only_lawsuit_for_rag_context(
     completion_callback_id = f"cb-completed-{uuid4()}"
     code = "0000000-00.2026.8.21.0111"
     external_summary = "SUMMARY_SENTINEL_MUST_NOT_REACH_RAG_CONTEXT"
-    summary_personal_id = "98765432100"
+    summary_personal_id = "55566677788"
     lawsuit_personal_id = "12345678901"
     party_personal_id = "11122233344"
+    representative_personal_id = "98765432100"
     captured_provider_sources: list[str] = []
 
     async def fake_generate(client, context, validation_errors=None):
         source = rag._provider_source_text(context)
         captured_provider_sources.append(source)
+        provider_payload = json.loads(source)
+        provider_steps = provider_payload["movimentos"]
+        temporal_facts = [step["source_temporal_facts"] for step in provider_steps]
         assert external_summary not in source
         assert summary_personal_id not in source
         assert lawsuit_personal_id not in source
@@ -70,27 +96,18 @@ async def test_paginated_request_uses_only_lawsuit_for_rag_context(
         assert "Sentença Proferida" in source
         assert "2026-06-10T09:00:00-03:00" in source
         assert "2026-06-11T09:00:00-03:00" in source
-        return f"""# Resumo do processo
-
-<ProcessHeader className=\"process-header\">
-- Processo: {code}
-- Classe: Procedimento Comum
-- Tribunal: TJRS
-</ProcessHeader>
-
-## Síntese
-Há movimentos processuais normalizados na fonte autorizada.
-
-## Linha do tempo relevante
-- Distribuição registrada.
-- Sentença proferida.
-
-## Situação atual
-O último movimento fornecido é uma sentença.
-
-## Pontos de atenção
-Nenhuma divergência objetiva identificada.
-"""
+        assert "PRIVATE_PHASE_SENTINEL" not in source
+        assert "PRIVATE_STATUS_SENTINEL" not in source
+        assert "Magistrado Sintético" not in source
+        assert "Vara Cível Sintética" not in source
+        assert "Advogada Sintética" not in source
+        assert representative_personal_id not in source
+        assert {
+            "scheduled_hearing": {"date": "03/03/2027", "time": "15:00"}
+        } in temporal_facts
+        assert {"explicit_period": {"value": 15, "unit_text": "dias úteis"}} in temporal_facts
+        _prime_fake_structured_summary(context)
+        return rag.render_structured_summary(context["_parsed_summary"], context)
 
     monkeypatch.setattr(rag, "_generate", fake_generate)
 
@@ -106,15 +123,29 @@ Nenhuma divergência objetiva identificada.
             "response_data": {
                 "code": code,
                 "instance": 1,
+                "area": "Cível",
+                "justice_description": "Justiça Estadual",
+                "phase": "PRIVATE_PHASE_SENTINEL",
+                "status": "PRIVATE_STATUS_SENTINEL",
+                "distribution_date": "2026-06-01T12:00:00Z",
+                "judge": "Magistrado Sintético",
+                "tribunal_acronym": "TJRS",
                 "classifications": [{"name": "Procedimento Comum"}],
-                "courts": [{"name": "TJRS"}],
+                "courts": [{"name": "Vara Cível Sintética"}],
                 "parties": [
                     {
                         "name": "Parte Sintética",
                         "side": "Active",
                         "person_type": "Autor",
                         "main_document": party_personal_id,
-                    }
+                    },
+                    {
+                        "name": "Advogada Sintética",
+                        "side": "Active",
+                        "person_type": "ADVOGADA",
+                        "main_document": representative_personal_id,
+                        "represented_party": "Parte Sintética",
+                    },
                 ],
                 "subjects": [{"code": "1", "name": "Obrigação"}],
                 "steps": [
@@ -129,8 +160,22 @@ Nenhuma divergência objetiva identificada.
                         "step_id": "step-2",
                         "step_number": 20,
                         "step_date": "2026-06-11T12:00:00Z",
+                        "step_type": "AUDIÊNCIA",
+                        "content": "20 - Audiência de conciliação designada para 03/03/2027 às 15:00.",
+                    },
+                    {
+                        "step_id": "step-3",
+                        "step_number": 30,
+                        "step_date": "2026-06-12T12:00:00Z",
+                        "step_type": "INTIMAÇÃO",
+                        "content": "30 - Intimação. Prazo: 15 dias úteis.",
+                    },
+                    {
+                        "step_id": "step-4",
+                        "step_number": 40,
+                        "step_date": "2026-06-13T12:00:00Z",
                         "step_type": "SENTENÇA",
-                        "content": f"20 - SentençaProferida CPF {lawsuit_personal_id}",
+                        "content": f"40 - SentençaProferida CPF {lawsuit_personal_id}",
                     },
                 ],
             },
@@ -171,6 +216,11 @@ Nenhuma divergência objetiva identificada.
                     json=body,
                 )
                 assert response.status_code == 200
+            duplicate_delivery = await client.post(
+                "/webhooks/judit/paginated-e2e-webhook",
+                json=completion_body,
+            )
+            assert duplicate_delivery.status_code == 200
 
         worker = Worker(
             pool,
@@ -190,7 +240,10 @@ Nenhuma divergência objetiva identificada.
 
         async with pool.acquire() as conn:
             process = await conn.fetchrow(
-                "SELECT id, current_version_id, parties FROM processes WHERE code = $1",
+                """
+                SELECT id, current_version_id, parties, representatives, header
+                FROM processes WHERE code = $1
+                """,
                 code,
             )
             assert process is not None
@@ -202,6 +255,21 @@ Nenhuma divergência objetiva identificada.
             assert normalized_parties[0]["name"] == "Parte Sintética"
             assert normalized_parties[0]["masked_person_id"] == "***.***.***-44"
             assert party_personal_id not in json.dumps(normalized_parties, ensure_ascii=False)
+            normalized_representatives = process["representatives"]
+            assert len(normalized_representatives) == 1
+            assert normalized_representatives[0]["name"] == "Advogada Sintética"
+            assert normalized_representatives[0]["represents"] == "Parte Sintética"
+            assert representative_personal_id not in json.dumps(
+                normalized_representatives, ensure_ascii=False
+            )
+            assert normalized_representatives[0]["masked_person_id"] == "***.***.***-00"
+            persisted_header = process["header"]
+            assert persisted_header["phase"] == "PRIVATE_PHASE_SENTINEL"
+            assert persisted_header["status"] == "PRIVATE_STATUS_SENTINEL"
+            assert persisted_header["distribution_date"] == "2026-06-01T12:00:00Z"
+            assert persisted_header["judge"] == "Magistrado Sintético"
+            assert persisted_header["court_unit"] == "Vara Cível Sintética"
+            assert persisted_header["area"] == "Cível"
 
             version = await conn.fetchrow(
                 """
@@ -245,12 +313,16 @@ Nenhuma divergência objetiva identificada.
                 """,
                 version_id,
             )
-            assert [row["step_number"] for row in steps] == [1, 2]
-            assert [row["metadata"]["source_step_number"] for row in steps] == [10, 20]
+            assert [row["step_number"] for row in steps] == [1, 2, 3, 4]
+            assert [row["metadata"]["source_step_number"] for row in steps] == [10, 20, 30, 40]
             assert steps[0]["text"] == "Processo Distribuído ELETRÔNICA REFER nos autos."
-            assert steps[1]["text"] == "Sentença Proferida CPF [documento removido]"
+            assert steps[1]["text"] == "Audiência de conciliação designada para 03/03/2027 às 15:00."
+            assert steps[2]["text"] == "Intimação. Prazo: 15 dias úteis."
+            assert steps[3]["text"] == "Sentença Proferida CPF [documento removido]"
             assert steps[0]["metadata"]["occurred_at_sao_paulo"] == "2026-06-10T09:00:00-03:00"
             assert steps[1]["metadata"]["occurred_at_sao_paulo"] == "2026-06-11T09:00:00-03:00"
+            assert steps[2]["metadata"]["occurred_at_sao_paulo"] == "2026-06-12T09:00:00-03:00"
+            assert steps[3]["metadata"]["occurred_at_sao_paulo"] == "2026-06-13T09:00:00-03:00"
             assert external_summary not in "\n".join(row["text"] for row in steps)
             assert summary_personal_id not in "\n".join(row["text"] for row in steps)
             assert party_personal_id not in "\n".join(row["text"] for row in steps)
@@ -274,5 +346,81 @@ Nenhuma divergência objetiva identificada.
                 process["id"],
             )
             assert summary_rows == 1
+            stored_summary = await conn.fetchrow(
+                """
+                SELECT markdown, validation, version_id
+                FROM process_summaries
+                WHERE process_id = $1 AND version_id = $2
+                """,
+                process["id"],
+                version_id,
+            )
+            assert stored_summary is not None
+            assert stored_summary["version_id"] == version_id
+            assert stored_summary["validation"]["passed"] is True, stored_summary["validation"]
+            assert "## Representantes" in stored_summary["markdown"]
+            assert "Advogada Sintética (representa: Parte Sintética)" in stored_summary["markdown"]
+            assert "Fase registrada: PRIVATE_PHASE_SENTINEL" in stored_summary["markdown"]
+            assert "Situação registrada: PRIVATE_STATUS_SENTINEL" in stored_summary["markdown"]
+            assert "***.***.***-00" not in stored_summary["markdown"]
+            assert representative_personal_id not in stored_summary["markdown"]
+
+            tenant_id = uuid4()
+            bearer_token = "paginated-e2e-tenant-token"
+            await conn.execute(
+                "INSERT INTO tenants (id, name) VALUES ($1, 'paginated e2e tenant')",
+                tenant_id,
+            )
+            await conn.execute(
+                "INSERT INTO tenant_processes (tenant_id, process_id) VALUES ($1, $2)",
+                tenant_id,
+                process["id"],
+            )
+            app.state.bearer_tokens = {bearer_token: tenant_id}
+            monkeypatch.setenv(
+                "RPY_BEARER_TOKENS", json.dumps({bearer_token: str(tenant_id)})
+            )
+
+        auth_headers = {"Authorization": f"Bearer {bearer_token}"}
+        async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+            legacy_response = await client.get(
+                f"/processes/{code}", headers=auth_headers
+            )
+            assert legacy_response.status_code == 200
+            legacy_payload = legacy_response.json()
+            assert legacy_payload["summary_status"] == "available"
+            assert legacy_payload["iaSummary"] == legacy_payload["summary"]["markdown"]
+            assert "Advogada Sintética (representa: Parte Sintética)" in legacy_payload["iaSummary"]
+
+            jsx_response = await client.get(
+                f"/v1/processos/{code}/resumo?format=jsx", headers=auth_headers
+            )
+            assert jsx_response.status_code == 200
+            assert isinstance(jsx_response.json()["iaSummary"], str)
+
+            json_response = await client.get(
+                f"/v1/processos/{code}/resumo?format=json", headers=auth_headers
+            )
+            assert json_response.status_code == 200
+            structured = json_response.json()["iaSummary"]
+            assert structured["schema_version"] == 3
+            assert structured["process"]["header"]["status"] == "PRIVATE_STATUS_SENTINEL"
+            assert structured["process"]["representatives"][0]["represents"] == "Parte Sintética"
+            assert representative_personal_id not in json.dumps(structured, ensure_ascii=False)
+
+            repeated_read = await client.get(
+                f"/v1/processos/{code}/resumo?format=json", headers=auth_headers
+            )
+            assert repeated_read.status_code == 200
+            assert repeated_read.json()["iaSummary"] == structured
+
+        async with pool.acquire() as conn:
+            assert await conn.fetchval(
+                "SELECT count(*) FROM process_summaries WHERE process_id = $1",
+                process["id"],
+            ) == 1
+            assert await conn.fetchval(
+                "SELECT count(*) FROM jobs WHERE task_name='generate_process_summary'"
+            ) == 1
     finally:
         await pool.close()

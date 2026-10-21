@@ -20,7 +20,8 @@ External generation requests use:
 - no streaming, because the full result must pass post-generation validation before publication;
 - exactly one correction request after a first validation failure.
 - Anthropic Structured Outputs via `output_config.format` with a closed JSON Schema;
-- deterministic application-side rendering of the document title, process header, party list and Markdown section headings;
+- deterministic application-side rendering of the document title, allowlisted process header, party and representative lists, and Markdown section headings;
+- public prompt version `process-summary-v6` for the additive source metadata and representative projection; secret summaries retain their independent local contract;
 - bounded structured fields and arrays; the model cannot add arbitrary top-level keys or document sections.
 
 The source document requested `temperature=0.2`. Current Claude models deprecate custom `temperature`, `top_p`, and `top_k` sampling parameters. Rpy therefore retains `REQUESTED_TEMPERATURE = 0.2` as documentary intent but does not send a custom temperature to Sonnet 5 or Opus 5. Sending an unsupported parameter would make the documented intent less reliable, not more reliable.

@@ -77,6 +77,62 @@ def test_naive_source_datetime_is_treated_as_utc_before_sao_paulo_conversion() -
     assert step["occurred_at"].isoformat() == "2026-06-15T12:00:00-03:00"
 
 
+def test_public_header_retains_source_phase_status_and_court_unit() -> None:
+    fields = extract_promotable_fields(
+        {
+            "secrecy_level": 0,
+            "area": "Cível",
+            "justice_description": "Justiça Estadual",
+            "phase": "INICIAL",
+            "status": "ATIVO",
+            "distribution_date": "2026-01-10T00:00:00Z",
+            "judge": "Magistrado de teste",
+            "courts": [{"name": "Vara de teste"}],
+        }
+    )
+
+    assert fields["header"] == {
+        "area": "Cível",
+        "justice_description": "Justiça Estadual",
+        "phase": "INICIAL",
+        "status": "ATIVO",
+        "distribution_date": "2026-01-10T00:00:00Z",
+        "judge": "Magistrado de teste",
+        "court_unit": "Vara de teste",
+    }
+
+
+def test_public_source_header_bounds_values_and_masks_personal_ids() -> None:
+    fields = extract_promotable_fields(
+        {
+            "secrecy_level": 0,
+            "status": {"name": "ATIVO CPF 12345678901"},
+            "phase": {"unexpected": "must omit"},
+            "courts": [{"name": "Vara CPF 123.456.789-01"}],
+        }
+    )
+
+    assert fields["header"]["status"] == "ATIVO CPF [documento removido]"
+    assert fields["header"]["court_unit"] == "Vara CPF [documento removido]"
+    assert "phase" not in fields["header"]
+    assert "12345678901" not in str(fields["header"])
+
+
+def test_secret_header_does_not_expand_to_status_or_phase() -> None:
+    fields = extract_promotable_fields(
+        {
+            "secrecy_level": 1,
+            "phase": "RESTRITA",
+            "status": "ATIVO",
+            "judge": "Magistrado de teste",
+            "parties": [{"name": "Não deve aparecer"}],
+        }
+    )
+
+    assert fields["header"] == {}
+    assert fields["parties"] == []
+
+
 def test_normalized_person_type_handles_unhashable_input_types() -> None:
     from app.judit import _normalized_person_type
 

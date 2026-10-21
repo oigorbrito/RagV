@@ -286,7 +286,8 @@ async def _job_payload(
                p.class_name AS summary_process_class_name,
                p.court AS summary_process_court,
                p.header AS summary_process_header,
-               p.parties AS summary_process_parties
+               p.parties AS summary_process_parties,
+               p.representatives AS summary_process_representatives
         FROM public_summary_requests psr
         LEFT JOIN process_summaries ps ON ps.id = psr.summary_id
         LEFT JOIN processes p ON p.id = psr.process_id
@@ -347,6 +348,7 @@ async def _job_payload(
                         "court": row["summary_process_court"],
                         "header": row["summary_process_header"],
                         "parties": row["summary_process_parties"],
+                        "representatives": row["summary_process_representatives"],
                     },
                 )
             )

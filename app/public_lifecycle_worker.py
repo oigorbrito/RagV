@@ -63,6 +63,7 @@ async def reconcile_generation_result(
                p.court,
                p.header,
                p.parties,
+               p.representatives,
                p.updated_at AS source_updated_at
         FROM process_summaries ps
         JOIN processes p

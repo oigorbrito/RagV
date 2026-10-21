@@ -401,6 +401,26 @@ await scenario("published iaSummary string is rendered and copied as readable te
   assert.doesNotMatch(ui.clipboard(), /<ProcessHeader|<Party/);
 });
 
+await scenario("structured iaSummary JSON is not interpreted as Markdown", async () => {
+  const structured = {
+    schema_version: 2,
+    process: { cnj: VALID_CODE, representatives: [] },
+    summary: { synthesis: "JSON deve permanecer estruturado." },
+  };
+  const ui = createHarness([
+    jsonResponse(200, { classification: "read_existing", process_exists: true }),
+    jsonResponse(200, readyPayload({ summary: null, iaSummary: structured })),
+  ]);
+
+  await ui.search();
+  await ui.click("open-existing-history");
+
+  assert.equal(ui.elements["copy-summary"].hidden, true);
+  assert.equal(ui.elements["summary-eyebrow"].hidden, true);
+  assert.ok(ui.elements["summary-body"].renderedText.includes("sem resumo publicado"));
+  assert.doesNotMatch(ui.elements["summary-body"].renderedText, /JSON deve permanecer estruturado|schema_version/);
+});
+
 await scenario("provider-free demo summary is labeled as synthetic instead of AI-generated", async () => {
   const ui = createHarness([
     jsonResponse(200, { classification: "read_existing", process_exists: true }),

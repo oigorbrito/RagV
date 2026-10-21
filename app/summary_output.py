@@ -81,12 +81,19 @@ _HEADER_FIELDS = (
     ("state", "Estado"),
     ("city", "Cidade"),
     ("amount", "Valor"),
+    ("court_unit", "Órgão julgador registrado"),
+    ("judge", "Magistrado(a) registrado(a)"),
+    ("phase", "Fase registrada"),
+    ("status", "Situação registrada"),
+    ("distribution_date", "Data de distribuição registrada"),
 )
 _LIST_FIELDS = (("timeline", "Movimentações"), *CONDITIONAL_SUMMARY_FIELDS)
 _REQUIRED_KEYS = frozenset(SUMMARY_OUTPUT_SCHEMA["required"])
 _DOCUMENT_KEYS = frozenset({"schema_version", "process", "summary"})
-_PROCESS_KEYS = frozenset({"cnj", "class_name", "court", "header", "parties"})
+_PROCESS_REQUIRED_KEYS = frozenset({"cnj", "class_name", "court", "header", "parties"})
+_PROCESS_KEYS = _PROCESS_REQUIRED_KEYS | {"representatives"}
 _PARTY_KEYS = frozenset({"name", "side", "person_type", "masked_person_id"})
+_REPRESENTATIVE_KEYS = _PARTY_KEYS | {"represents"}
 _HEADER_KEYS = frozenset(key for key, _ in _HEADER_FIELDS)
 _SPACE_RE = re.compile(r"\s+")
 _MAX_SYNTHESIS_CHARS = 6000
@@ -208,11 +215,15 @@ def parse_structured_summary(raw: str) -> dict[str, Any]:
 def structured_summary_document_is_canonical(value: Any) -> bool:
     if not isinstance(value, dict) or set(value) != _DOCUMENT_KEYS:
         return False
-    if value.get("schema_version") != 2:
+    schema_version = value.get("schema_version")
+    if schema_version not in {2, 3}:
         return False
 
     process = value.get("process")
-    if not isinstance(process, dict) or set(process) != _PROCESS_KEYS:
+    expected_process_keys = (
+        _PROCESS_REQUIRED_KEYS if schema_version == 2 else _PROCESS_KEYS
+    )
+    if not isinstance(process, dict) or set(process) != expected_process_keys:
         return False
     if not isinstance(process.get("cnj"), str):
         return False
@@ -237,6 +248,17 @@ def structured_summary_document_is_canonical(value: Any) -> bool:
             not isinstance(party, dict)
             or not set(party).issubset(_PARTY_KEYS)
             or any(not isinstance(item, str) for item in party.values())
+        ):
+            return False
+
+    representatives = process.get("representatives", [])
+    if not isinstance(representatives, list):
+        return False
+    for representative in representatives:
+        if (
+            not isinstance(representative, dict)
+            or not set(representative).issubset(_REPRESENTATIVE_KEYS)
+            or any(not isinstance(item, str) for item in representative.values())
         ):
             return False
 
@@ -274,6 +296,26 @@ def structured_summary_process(context: dict[str, Any]) -> dict[str, Any]:
         if isinstance(parties, list)
         else []
     )
+    known_party_names = {
+        _inline(item.get("name")).casefold()
+        for item in normalized_parties
+        if item.get("name")
+    }
+    raw_representatives = context.get("representatives")
+    normalized_representatives = []
+    if isinstance(raw_representatives, list):
+        for item in raw_representatives:
+            if not isinstance(item, dict) or not _inline(item.get("name")):
+                continue
+            representative = {
+                key: _inline(item.get(key))
+                for key in ("name", "side", "person_type", "masked_person_id")
+                if item.get(key) is not None and _inline(item.get(key))
+            }
+            represents = _inline(item.get("represents"))
+            if represents and represents.casefold() in known_party_names:
+                representative["represents"] = represents
+            normalized_representatives.append(representative)
     return {
         "cnj": _inline(context.get("code")),
         "class_name": _inline(context.get("class_name")) or None,
@@ -284,6 +326,7 @@ def structured_summary_process(context: dict[str, Any]) -> dict[str, Any]:
             if header.get(key) is not None
         },
         "parties": normalized_parties,
+        "representatives": normalized_representatives,
     }
 
 
@@ -291,17 +334,20 @@ def structured_summary_document_matches_process(
     value: Any,
     context: dict[str, Any],
 ) -> bool:
-    return (
-        structured_summary_document_is_canonical(value)
-        and value["process"] == structured_summary_process(context)
-    )
+    if not structured_summary_document_is_canonical(value):
+        return False
+    expected_process = structured_summary_process(context)
+    actual_process = value["process"]
+    if value["schema_version"] == 2:
+        expected_process.pop("representatives")
+    return actual_process == expected_process
 
 
 def structured_summary_document(
     payload: dict[str, Any], context: dict[str, Any]
 ) -> dict[str, Any]:
     return {
-        "schema_version": 2,
+        "schema_version": 3,
         "process": structured_summary_process(context),
         "summary": {
             "synthesis": payload["synthesis"],
@@ -365,6 +411,17 @@ def render_structured_summary(payload: dict[str, Any], context: dict[str, Any]) 
     party_names = [name for name in party_names if name]
     lines.extend(["", "## Partes"])
     lines.extend((f"- {name}" for name in party_names) if party_names else ["Não informado."])
+
+    representatives = structured_summary_process(context)["representatives"]
+    representative_lines = []
+    for representative in representatives:
+        name = _inline(representative.get("name"))
+        represents = _inline(representative.get("represents"))
+        if name:
+            label = f"{name} (representa: {represents})" if represents else name
+            representative_lines.append(f"- {label}")
+    lines.extend(["", "## Representantes"])
+    lines.extend(representative_lines or ["Não informado."])
 
     lines.extend(["", "## Classe", class_name or "Não informado."])
 
