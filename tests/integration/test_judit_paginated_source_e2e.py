@@ -259,15 +259,15 @@ async def test_paginated_request_uses_only_lawsuit_for_rag_context(
             assert len(normalized_representatives) == 1  # nosec B101 - pytest assertion
             assert normalized_representatives[0]["name"] == "Advogada Sintética"  # nosec B101 - pytest assertion
             assert normalized_representatives[0]["represents"] == "Parte Sintética"  # nosec B101 - pytest assertion
-            assert representative_personal_id not in json.dumps(
+            assert representative_personal_id not in json.dumps(  # nosec B101 - pytest assertion
                 normalized_representatives, ensure_ascii=False
             )
-            assert normalized_representatives[0]["masked_person_id"] == "***.***.***-00"
+            assert normalized_representatives[0]["masked_person_id"] == "***.***.***-00"  # nosec B101 - pytest assertion
             persisted_header = process["header"]
-            assert persisted_header["phase"] == "PRIVATE_PHASE_SENTINEL"
-            assert persisted_header["status"] == "PRIVATE_STATUS_SENTINEL"
-            assert persisted_header["distribution_date"] == "2026-06-01T12:00:00Z"
-            assert persisted_header["judge"] == "Magistrado Sintético"
+            assert persisted_header["phase"] == "PRIVATE_PHASE_SENTINEL"  # nosec B101 - pytest assertion
+            assert persisted_header["status"] == "PRIVATE_STATUS_SENTINEL"  # nosec B101 - pytest assertion
+            assert persisted_header["distribution_date"] == "2026-06-01T12:00:00Z"  # nosec B101 - pytest assertion
+            assert persisted_header["judge"] == "Magistrado Sintético"  # nosec B101 - pytest assertion
             assert persisted_header["court_unit"] == "Vara Cível Sintética"
             assert persisted_header["area"] == "Cível"
 
