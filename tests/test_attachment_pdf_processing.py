@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import io
+from unittest import TestCase
 
 import pytest
 from pypdf import PdfWriter
@@ -16,9 +17,22 @@ from app.attachment_processing import (
 )
 
 
-def _text_pdf(text: str) -> bytes:
-    escaped = text.replace("\\", "\\\\").replace("(", "\\(").replace(")", "\\)")
-    stream = f"BT /F1 12 Tf 72 720 Td ({escaped}) Tj ET".encode("latin-1")
+def _text_pdf(
+    text: str,
+    *,
+    content_filter_count: int = 0,
+    content_array_item_count: int = 0,
+) -> bytes:
+    if content_array_item_count:
+        stream = b"[" + b"0 " * content_array_item_count + b"]"
+    else:
+        escaped = text.replace("\\", "\\\\").replace("(", "\\(").replace(")", "\\)")
+        stream = f"BT /F1 12 Tf 72 720 Td ({escaped}) Tj ET".encode("latin-1")
+    filter_entry = (
+        b" /Filter [" + b" ".join([b"/FlateDecode"] * content_filter_count) + b"]"
+        if content_filter_count
+        else b""
+    )
     objects = [
         b"<< /Type /Catalog /Pages 2 0 R >>",
         b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
@@ -26,7 +40,12 @@ def _text_pdf(text: str) -> bytes:
             b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] "
             b"/Resources << /Font << /F1 5 0 R >> >> /Contents 4 0 R >>"
         ),
-        b"<< /Length " + str(len(stream)).encode("ascii") + b" >>\nstream\n" + stream + b"\nendstream",
+        b"<< /Length "
+        + str(len(stream)).encode("ascii")
+        + filter_entry
+        + b" >>\nstream\n"
+        + stream
+        + b"\nendstream",
         b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
     ]
     out = bytearray(b"%PDF-1.4\n")
@@ -48,6 +67,16 @@ def _text_pdf(text: str) -> bytes:
         ).encode("ascii")
     )
     return bytes(out)
+
+
+def _eof_xref_pdf() -> bytes:
+    body = (
+        b"%PDF-1.0\n"
+        b"1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj\n"
+        b"2 0 obj<</Type/Pages/Kids[]/Count 0>>endobj\n"
+    )
+    tail = b"\nstartxref\n%d\n%%%%EOF" % len(body)
+    return body + b"xref\n0 3\n0000000000 65535 f \n" + tail
 
 
 def _blank_pdf(*, encrypted: bool = False) -> bytes:
@@ -114,6 +143,68 @@ def test_pdf_size_limit_is_checked_before_parse():
         )
     assert exc_info.value.error_code == "attachment_too_large"
     assert exc_info.value.status == "unreadable"
+
+
+def test_pdf_parser_resource_limit_is_attachment_local():
+    data = _text_pdf("bounded parser", content_filter_count=17)
+    with pytest.raises(AttachmentProcessingError) as exc_info:
+        parse_pdf_attachment(
+            data,
+            content_type="application/pdf",
+            limits=AttachmentProcessingLimits(max_bytes=50_000, chunk_chars=256),
+        )
+    TestCase().assertEqual(exc_info.value.error_code, "pdf_processing_limit_exceeded")
+    TestCase().assertEqual(exc_info.value.status, "unreadable")
+
+
+def test_pdf_stream_array_limit_is_attachment_local():
+    data = _text_pdf("", content_array_item_count=100_001)
+    with pytest.raises(AttachmentProcessingError) as exc_info:
+        parse_pdf_attachment(
+            data,
+            content_type="application/pdf",
+            limits=AttachmentProcessingLimits(max_bytes=10 * 1024 * 1024, chunk_chars=256),
+        )
+    TestCase().assertEqual(exc_info.value.error_code, "pdf_processing_limit_exceeded")
+    TestCase().assertEqual(exc_info.value.status, "unreadable")
+
+
+def test_pdf_eof_in_standard_xref_is_controlled_corrupt_failure():
+    with pytest.raises(AttachmentProcessingError) as exc_info:
+        parse_pdf_attachment(
+            _eof_xref_pdf(),
+            content_type="application/pdf",
+            limits=AttachmentProcessingLimits(max_bytes=50_000, chunk_chars=256),
+        )
+    TestCase().assertEqual(exc_info.value.error_code, "invalid_pdf")
+    TestCase().assertEqual(exc_info.value.status, "corrupt")
+
+
+@pytest.mark.asyncio
+async def test_pdf_parser_resource_limit_remains_controlled_in_worker_protocol():
+    import base64
+
+    from app.attachment_sandbox import PROTOCOL_VERSION, _parse_request
+
+    data = _text_pdf("bounded parser", content_filter_count=17)
+    response = await _parse_request(
+        {
+            "version": PROTOCOL_VERSION,
+            "content_type": "application/pdf",
+            "max_bytes": 50_000,
+            "chunk_chars": 256,
+            "data_b64": base64.b64encode(data).decode("ascii"),
+        }
+    )
+    TestCase().assertEqual(
+        response,
+        {
+            "version": PROTOCOL_VERSION,
+            "ok": False,
+            "status": "unreadable",
+            "error_code": "pdf_processing_limit_exceeded",
+        },
+    )
 
 
 
